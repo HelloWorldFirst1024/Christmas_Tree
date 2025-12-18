@@ -173,17 +173,109 @@ export default function SharePage({ shareId }: SharePageProps) {
     };
   }, [preloadTextPlayed, shareData, sceneConfig]);
 
+  // 默认手势配置
+  const defaultGestures = {
+    Closed_Fist: 'formed',
+    Open_Palm: 'chaos',
+    Pointing_Up: 'music',
+    Thumb_Down: 'none',
+    Thumb_Up: 'screenshot',
+    Victory: 'text',
+    ILoveYou: 'heart'
+  };
+
   // 上一次触发的手势（防止重复触发）
   const lastGestureRef = useRef<string>('');
   const gestureActiveRef = useRef<boolean>(false);
+
+  // 执行手势动作
+  const executeGestureAction = useCallback((action: string) => {
+    const effectConfig = sceneConfig.gestureEffect || { duration: 5000, hideTree: true };
+    const texts = sceneConfig.gestureTexts || [sceneConfig.gestureText || shareData?.message || 'MERRY CHRISTMAS'];
+    const switchInterval = (sceneConfig.textSwitchInterval || 3) * 1000;
+    
+    switch (action) {
+      case 'formed':
+        setSceneState('FORMED');
+        break;
+      case 'chaos':
+        setSceneState('CHAOS');
+        break;
+      case 'heart':
+        if (heartTimeoutRef.current) clearTimeout(heartTimeoutRef.current);
+        setShowHeart(true);
+        setShowText(false);
+        if (effectConfig.hideTree) setHideTree(true);
+        heartTimeoutRef.current = setTimeout(() => {
+          setShowHeart(false);
+          if (effectConfig.hideTree) setHideTree(false);
+          gestureActiveRef.current = false;
+        }, effectConfig.duration);
+        break;
+      case 'text':
+        if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
+        if (textSwitchRef.current) clearInterval(textSwitchRef.current);
+        
+        setCurrentTextIndex(0);
+        setShowText(true);
+        setShowHeart(false);
+        if (effectConfig.hideTree) setHideTree(true);
+        
+        if (texts.length > 1) {
+          let idx = 0;
+          textSwitchRef.current = setInterval(() => {
+            idx = (idx + 1) % texts.length;
+            setCurrentTextIndex(idx);
+          }, switchInterval);
+        }
+        
+        const totalDuration = texts.length > 1 
+          ? Math.max(effectConfig.duration, texts.length * switchInterval)
+          : effectConfig.duration;
+        
+        textTimeoutRef.current = setTimeout(() => {
+          setShowText(false);
+          if (effectConfig.hideTree) setHideTree(false);
+          if (textSwitchRef.current) clearInterval(textSwitchRef.current);
+          gestureActiveRef.current = false;
+        }, totalDuration);
+        break;
+      case 'music':
+        if (audioRef.current) {
+          if (audioRef.current.paused) {
+            audioRef.current.play().catch(() => {});
+            setMusicPlaying(true);
+          } else {
+            audioRef.current.pause();
+            setMusicPlaying(false);
+          }
+        }
+        break;
+      case 'screenshot':
+        const canvas = document.querySelector('canvas');
+        if (canvas) {
+          const link = document.createElement('a');
+          link.download = 'christmas-tree.png';
+          link.href = canvas.toDataURL('image/png');
+          link.click();
+        }
+        break;
+      case 'reset':
+        setSceneState('FORMED');
+        setRotationSpeed(0);
+        break;
+      default:
+        break;
+    }
+  }, [sceneConfig, shareData]);
 
   // 处理手势变化
   const handleGestureChange = useCallback((gesture: string) => {
     setCurrentGesture(gesture);
     
-    const effectConfig = sceneConfig.gestureEffect || { duration: 5000, hideTree: true };
-    const texts = sceneConfig.gestureTexts || [sceneConfig.gestureText || shareData?.message || 'MERRY CHRISTMAS'];
-    const switchInterval = (sceneConfig.textSwitchInterval || 3) * 1000;
+    // 使用配置中的手势映射，如果没有则使用默认值
+    const gestures = sceneConfig.gestures || defaultGestures;
+    const action = gestures[gesture as keyof typeof gestures];
     
     // 如果是同一个手势且效果正在显示中，不重复触发
     if (gesture === lastGestureRef.current && gestureActiveRef.current) {
@@ -195,53 +287,12 @@ export default function SharePage({ shareId }: SharePageProps) {
       gestureActiveRef.current = false;
     }
     
-    if (gesture === 'ILoveYou') {
-      if (heartTimeoutRef.current) clearTimeout(heartTimeoutRef.current);
+    if (action && action !== 'none') {
       lastGestureRef.current = gesture;
       gestureActiveRef.current = true;
-      setShowHeart(true);
-      setShowText(false);
-      if (effectConfig.hideTree) setHideTree(true);
-      heartTimeoutRef.current = setTimeout(() => {
-        setShowHeart(false);
-        if (effectConfig.hideTree) setHideTree(false);
-        gestureActiveRef.current = false;
-      }, effectConfig.duration);
-    } else if (gesture === 'Victory') {
-      if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
-      if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-      
-      lastGestureRef.current = gesture;
-      gestureActiveRef.current = true;
-      setCurrentTextIndex(0);
-      setShowText(true);
-      setShowHeart(false);
-      if (effectConfig.hideTree) setHideTree(true);
-      
-      // 如果有多条文字，启动轮播
-      if (texts.length > 1) {
-        let idx = 0;
-        textSwitchRef.current = setInterval(() => {
-          idx = (idx + 1) % texts.length;
-          setCurrentTextIndex(idx);
-        }, switchInterval);
-      }
-      
-      const totalDuration = texts.length > 1 
-        ? Math.max(effectConfig.duration, texts.length * switchInterval)
-        : effectConfig.duration;
-      
-      textTimeoutRef.current = setTimeout(() => {
-        setShowText(false);
-        if (effectConfig.hideTree) setHideTree(false);
-        if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-        gestureActiveRef.current = false;
-      }, totalDuration);
+      executeGestureAction(action);
     }
-    
-    if (gesture === 'Open_Palm') setSceneState('CHAOS');
-    if (gesture === 'Closed_Fist') setSceneState('FORMED');
-  }, [sceneConfig, shareData]);
+  }, [sceneConfig.gestures, executeGestureAction]);
 
   // 初始化音频 - 教程显示时不自动播放
   useEffect(() => {

@@ -87,22 +87,22 @@ export const SpiralRibbon = ({
     return new THREE.ExtrudeGeometry(shape, extrudeSettings);
   }, []);
 
-  const animSpeed = Math.max(0.5, Math.min(3, speed)) * 1.5;
+  // 动画持续时间（秒），speed 越大越快
+  const duration = 1 / Math.max(0.3, Math.min(3, speed));
   const easeFn = easingFunctions[easing] || easingFunctions.easeInOut;
-  const directionRef = useRef(1); // 1=聚合, -1=散开
 
   useFrame((frameState, delta) => {
     // 动画进度
     const targetProgress = state === 'FORMED' ? 1 : 0;
     
-    // 记录动画方向
-    if (targetProgress > progressRef.current) directionRef.current = 1;
-    else if (targetProgress < progressRef.current) directionRef.current = -1;
-    
-    progressRef.current += (targetProgress - progressRef.current) * delta * animSpeed;
-    const rawT = Math.max(0, Math.min(1, progressRef.current));
-    // 根据方向应用缓动：聚合时正向，散开时反向
-    const t = directionRef.current > 0 ? easeFn(rawT) : 1 - easeFn(1 - rawT);
+    // 线性插值进度，基于持续时间
+    const step = delta / duration;
+    if (targetProgress > progressRef.current) {
+      progressRef.current = Math.min(targetProgress, progressRef.current + step);
+    } else if (targetProgress < progressRef.current) {
+      progressRef.current = Math.max(targetProgress, progressRef.current - step);
+    }
+    const t = easeFn(progressRef.current);
 
     if (ribbonRef.current) {
       ribbonRef.current.scale.setScalar(Math.max(0.01, t));

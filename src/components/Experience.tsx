@@ -53,9 +53,6 @@ export const Experience = ({
   const isPhotoSelected = selectedPhotoIndex !== null;
   const mobile = isMobile();
 
-  // Debug: 检查 topStar 配置
-  console.log('[Experience] config.topStar:', config.topStar);
-
   // 确保 config 有新字段的默认值
   const safeConfig = {
     ...config,
