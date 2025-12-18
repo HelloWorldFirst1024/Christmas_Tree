@@ -116,7 +116,15 @@ export const Experience = ({
       {/* 圣诞树主体 - 特效时隐藏 */}
       {!hideTree && (
         <group position={[0, -6, 0]}>
-          {safeConfig.foliage.enabled && <Foliage state={sceneState} />}
+          {safeConfig.foliage.enabled && (
+            <Foliage 
+              state={sceneState} 
+              easing={config.animation?.easing}
+              speed={config.animation?.speed}
+              scatterShape={config.animation?.scatterShape}
+              gatherShape={config.animation?.gatherShape}
+            />
+          )}
           <Suspense fallback={null}>
             {photoPaths.length > 0 && (
               <PhotoOrnaments
@@ -124,17 +132,48 @@ export const Experience = ({
                 selectedIndex={selectedPhotoIndex}
                 onPhotoClick={onPhotoSelect}
                 photoPaths={photoPaths}
+                easing={config.animation?.easing}
+                speed={config.animation?.speed}
+                scatterShape={config.animation?.scatterShape}
+                gatherShape={config.animation?.gatherShape}
               />
             )}
             {safeConfig.elements.enabled && (
               <ChristmasElements 
                 state={sceneState} 
                 customImages={config.elements?.customImages}
+                easing={config.animation?.easing}
+                speed={config.animation?.speed}
+                scatterShape={config.animation?.scatterShape}
+                gatherShape={config.animation?.gatherShape}
               />
             )}
-            {safeConfig.lights.enabled && <FairyLights state={sceneState} />}
-            {safeConfig.giftPile.enabled && <GiftPile state={sceneState} count={safeConfig.giftPile.count} />}
-            <SpiralRibbon state={sceneState} color="#FF2222" glowColor="#FF4444" />
+            {safeConfig.lights.enabled && (
+              <FairyLights 
+                state={sceneState}
+                easing={config.animation?.easing}
+                speed={config.animation?.speed}
+                scatterShape={config.animation?.scatterShape}
+                gatherShape={config.animation?.gatherShape}
+              />
+            )}
+            {safeConfig.giftPile.enabled && (
+              <GiftPile 
+                state={sceneState} 
+                count={safeConfig.giftPile.count}
+                easing={config.animation?.easing}
+                speed={config.animation?.speed}
+                scatterShape={config.animation?.scatterShape}
+                gatherShape={config.animation?.gatherShape}
+              />
+            )}
+            <SpiralRibbon 
+              state={sceneState} 
+              color="#FF2222" 
+              glowColor="#FF4444"
+              easing={config.animation?.easing}
+              speed={config.animation?.speed}
+            />
             <TopStar state={sceneState} avatarUrl={config.topStar?.avatarUrl} />
           </Suspense>
           {safeConfig.sparkles.enabled && (

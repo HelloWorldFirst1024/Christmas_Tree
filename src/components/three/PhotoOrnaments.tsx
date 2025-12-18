@@ -4,22 +4,116 @@ import { useTexture } from '@react-three/drei';
 import * as THREE from 'three';
 import { MathUtils } from 'three';
 import { CONFIG } from '../../config';
-import type { SceneState, PhotoScreenPosition } from '../../types';
+import type { SceneState, PhotoScreenPosition, AnimationEasing, ScatterShape, GatherShape } from '../../types';
 
 // 全局变量存储照片位置，用于捏合选择
 export let photoScreenPositions: PhotoScreenPosition[] = [];
+
+// 缓动函数
+const easingFunctions: Record<AnimationEasing, (t: number) => number> = {
+  linear: (t) => t,
+  easeIn: (t) => t * t * t,
+  easeOut: (t) => 1 - Math.pow(1 - t, 3),
+  easeInOut: (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2,
+  bounce: (t) => {
+    const n1 = 7.5625, d1 = 2.75;
+    if (t < 1 / d1) return n1 * t * t;
+    if (t < 2 / d1) { t -= 1.5 / d1; return n1 * t * t + 0.75; }
+    if (t < 2.5 / d1) { t -= 2.25 / d1; return n1 * t * t + 0.9375; }
+    t -= 2.625 / d1; return n1 * t * t + 0.984375;
+  },
+  elastic: (t) => {
+    if (t === 0 || t === 1) return t;
+    return Math.pow(2, -10 * t) * Math.sin((t * 10 - 0.75) * (2 * Math.PI / 3)) + 1;
+  }
+};
+
+// 根据散开形状生成位置
+const generateScatterPosition = (shape: ScatterShape): THREE.Vector3 => {
+  switch (shape) {
+    case 'explosion': {
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const r = 25 + Math.random() * 30;
+      return new THREE.Vector3(
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.sin(phi) * Math.sin(theta),
+        r * Math.cos(phi)
+      );
+    }
+    case 'spiral': {
+      const t = Math.random();
+      const angle = t * Math.PI * 10;
+      const r = 10 + t * 30 + Math.random() * 6;
+      const y = -25 + t * 60 + (Math.random() - 0.5) * 10;
+      return new THREE.Vector3(r * Math.cos(angle), y, r * Math.sin(angle));
+    }
+    case 'rain': {
+      return new THREE.Vector3(
+        (Math.random() - 0.5) * 70,
+        30 + Math.random() * 40,
+        (Math.random() - 0.5) * 70
+      );
+    }
+    case 'ring': {
+      const angle = Math.random() * Math.PI * 2;
+      const r = 25 + Math.random() * 12;
+      const y = (Math.random() - 0.5) * 18;
+      return new THREE.Vector3(r * Math.cos(angle), y, r * Math.sin(angle));
+    }
+    case 'sphere':
+    default:
+      return new THREE.Vector3(
+        (Math.random() - 0.5) * 70,
+        (Math.random() - 0.5) * 70,
+        (Math.random() - 0.5) * 70
+      );
+  }
+};
+
+// 根据聚合形状计算延迟
+const calculateGatherDelay = (targetPos: THREE.Vector3, shape: GatherShape): number => {
+  const normalizedY = (targetPos.y + CONFIG.tree.height / 2) / CONFIG.tree.height;
+  const normalizedX = (targetPos.x + CONFIG.tree.radius) / (2 * CONFIG.tree.radius);
+  const dist = Math.sqrt(targetPos.x * targetPos.x + targetPos.z * targetPos.z) / CONFIG.tree.radius;
+  const angle = Math.atan2(targetPos.z, targetPos.x);
+  
+  switch (shape) {
+    case 'stack': return normalizedY * 0.7;
+    case 'spiralIn': return ((angle + Math.PI) / (2 * Math.PI) + normalizedY * 0.5) * 0.5;
+    case 'implode': return (1 - dist) * 0.5;
+    case 'waterfall': return (1 - normalizedY) * 0.7;
+    case 'wave': return normalizedX * 0.6;
+    case 'direct':
+    default: return 0;
+  }
+};
 
 interface PhotoOrnamentsProps {
   state: SceneState;
   selectedIndex: number | null;
   onPhotoClick?: (index: number | null) => void;
   photoPaths: string[];
+  easing?: AnimationEasing;
+  speed?: number;
+  scatterShape?: ScatterShape;
+  gatherShape?: GatherShape;
 }
 
-export const PhotoOrnaments = ({ state, selectedIndex, onPhotoClick, photoPaths }: PhotoOrnamentsProps) => {
+export const PhotoOrnaments = ({ 
+  state, 
+  selectedIndex, 
+  onPhotoClick, 
+  photoPaths,
+  easing = 'easeInOut',
+  speed = 1,
+  scatterShape = 'sphere',
+  gatherShape = 'direct'
+}: PhotoOrnamentsProps) => {
   const textures = useTexture(photoPaths);
   const count = photoPaths.length;
   const groupRef = useRef<THREE.Group>(null);
+  const progressRef = useRef(0);
 
   useMemo(() => {
     textures.forEach((texture: THREE.Texture) => {
@@ -35,13 +129,14 @@ export const PhotoOrnaments = ({ state, selectedIndex, onPhotoClick, photoPaths 
 
   const data = useMemo(() => {
     return new Array(count).fill(0).map((_, i) => {
-      const chaosPos = new THREE.Vector3((Math.random() - 0.5) * 70, (Math.random() - 0.5) * 70, (Math.random() - 0.5) * 70);
+      const chaosPos = generateScatterPosition(scatterShape);
       const h = CONFIG.tree.height;
       const y = (Math.random() * h) - (h / 2);
       const rBase = CONFIG.tree.radius;
       const currentRadius = (rBase * (1 - (y + (h / 2)) / h)) + 0.5;
       const theta = Math.random() * Math.PI * 2;
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
+      const gatherDelay = calculateGatherDelay(targetPos, gatherShape);
 
       const isBig = Math.random() < 0.2;
       const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
@@ -55,6 +150,7 @@ export const PhotoOrnaments = ({ state, selectedIndex, onPhotoClick, photoPaths 
         weight,
         textureIndex: i % textures.length,
         borderColor,
+        gatherDelay,
         currentPos: chaosPos.clone(),
         currentScale: baseScale,
         chaosRotation: new THREE.Euler(Math.random() * Math.PI, Math.random() * Math.PI, Math.random() * Math.PI),
@@ -63,41 +159,55 @@ export const PhotoOrnaments = ({ state, selectedIndex, onPhotoClick, photoPaths 
         wobbleSpeed: 0.5 + Math.random() * 0.5
       };
     });
-  }, [textures, count]);
+  }, [textures, count, scatterShape, gatherShape]);
+
+  const animSpeed = Math.max(0.5, Math.min(3, speed)) * 1.5;
+  const easeFn = easingFunctions[easing] || easingFunctions.easeInOut;
+  const directionRef = useRef(1); // 1=聚合, -1=散开
 
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
     const time = stateObj.clock.elapsedTime;
     const camera = stateObj.camera;
+    
+    // 更新动画进度（非选中状态时使用缓动）
+    const targetProgress = isFormed ? 1 : 0;
+    
+    // 记录动画方向
+    if (targetProgress > progressRef.current) directionRef.current = 1;
+    else if (targetProgress < progressRef.current) directionRef.current = -1;
+    
+    progressRef.current += (targetProgress - progressRef.current) * delta * animSpeed;
+    const rawT = Math.max(0, Math.min(1, progressRef.current));
 
     groupRef.current.children.forEach((group, i) => {
       const objData = data[i];
       const isSelected = selectedIndex === i;
 
-      let target: THREE.Vector3;
       let targetScale: number;
 
       if (isSelected) {
-        // 图片移动到相机正前方
+        // 图片移动到相机正前方（选中时使用直接 lerp）
         const cameraDir = new THREE.Vector3();
         camera.getWorldDirection(cameraDir);
-        target = camera.position.clone().add(cameraDir.multiplyScalar(25));
+        const target = camera.position.clone().add(cameraDir.multiplyScalar(25));
         targetScale = 15;
-      } else if (isFormed) {
-        target = objData.targetPos;
-        targetScale = objData.scale;
+        objData.currentPos.lerp(target, delta * 8);
+        group.position.copy(objData.currentPos);
       } else {
-        target = objData.chaosPos;
+        // 非选中时使用缓动函数，根据聚合延迟计算进度
+        let elementT: number;
+        if (directionRef.current > 0) {
+          const delayedProgress = Math.max(0, Math.min(1, (rawT - objData.gatherDelay) / (1 - objData.gatherDelay + 0.001)));
+          elementT = easeFn(delayedProgress);
+        } else {
+          const reverseDelay = Math.max(0, Math.min(1, (rawT - (1 - objData.gatherDelay - 0.3)) / (objData.gatherDelay + 0.3 + 0.001)));
+          elementT = 1 - easeFn(1 - reverseDelay);
+        }
         targetScale = objData.scale;
-      }
-
-      const lerpSpeed = isSelected ? 8 : (isFormed ? 2 * objData.weight : 1.5);
-      objData.currentPos.lerp(target, delta * lerpSpeed);
-      group.position.copy(objData.currentPos);
-
-      if (!isSelected && objData.currentPos.distanceTo(target) > 0.1) {
-        objData.currentPos.lerp(target, delta * lerpSpeed * 1.5);
+        group.position.lerpVectors(objData.chaosPos, objData.targetPos, elementT);
+        objData.currentPos.copy(group.position);
       }
 
       if (!isSelected) {

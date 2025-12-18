@@ -49,9 +49,44 @@ export const PRESET_MUSIC = [
   { id: 'i-love-you-so', name: '💕 I Love You So', url: '/music/I Love You So - The Walters.mp3', lrc: '/music/I Love You So - The Walters.lrc' },
 ] as const;
 
+// 动画缓动类型
+export type AnimationEasing = 
+  | 'linear'      // 线性（匀速）
+  | 'easeIn'      // 先慢后快
+  | 'easeOut'     // 先快后慢
+  | 'easeInOut'   // 两头慢中间快
+  | 'bounce'      // 弹跳效果
+  | 'elastic';    // 弹性效果
+
+// 散开形状类型
+export type ScatterShape = 
+  | 'sphere'      // 球形散开（默认）
+  | 'explosion'   // 爆炸式向外
+  | 'spiral'      // 螺旋散开
+  | 'rain'        // 向上飘散
+  | 'ring';       // 环形散开
+
+// 聚合形状类型
+export type GatherShape = 
+  | 'direct'      // 直接聚合（默认）
+  | 'stack'       // 搭积木（从下往上堆叠）
+  | 'spiralIn'    // 螺旋聚合
+  | 'implode'     // 向心收缩
+  | 'waterfall'   // 瀑布落下
+  | 'wave';       // 波浪扫过
+
+// 动画配置
+export interface AnimationConfig {
+  easing: AnimationEasing;    // 缓动函数
+  speed: number;              // 动画速度 0.5-3（1为默认）
+  scatterShape: ScatterShape; // 散开形状
+  gatherShape: GatherShape;   // 聚合形状
+}
+
 // 场景配置类型
 export interface SceneConfig {
   foliage: { enabled: boolean; count: number };
+  animation?: AnimationConfig;  // 聚合/散开动画配置
   lights: { enabled: boolean; count: number };
   elements: { 
     enabled: boolean; 

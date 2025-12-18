@@ -333,6 +333,29 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
     }
   }
   
+  // 动画配置
+  if (cfg.animation && typeof cfg.animation === 'object') {
+    const a = cfg.animation as Record<string, unknown>;
+    const allowedEasings = ['linear', 'easeIn', 'easeOut', 'easeInOut', 'bounce', 'elastic'];
+    const allowedScatterShapes = ['sphere', 'explosion', 'spiral', 'rain', 'ring'];
+    const allowedGatherShapes = ['direct', 'stack', 'spiralIn', 'implode', 'waterfall', 'wave'];
+    const easing = typeof a.easing === 'string' && allowedEasings.includes(a.easing) 
+      ? a.easing 
+      : 'easeInOut';
+    const scatterShape = typeof a.scatterShape === 'string' && allowedScatterShapes.includes(a.scatterShape)
+      ? a.scatterShape
+      : 'sphere';
+    const gatherShape = typeof a.gatherShape === 'string' && allowedGatherShapes.includes(a.gatherShape)
+      ? a.gatherShape
+      : 'direct';
+    sanitized.animation = {
+      easing,
+      speed: sanitizeNumber(a.speed, 0.3, 3, 1),
+      scatterShape,
+      gatherShape
+    };
+  }
+  
   return sanitized;
 };
 

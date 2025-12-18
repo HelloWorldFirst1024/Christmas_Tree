@@ -1,12 +1,41 @@
 import React from 'react';
-import type { SceneConfig, GestureConfig, GestureAction, MusicConfig } from '../../types';
+import type { SceneConfig, GestureConfig, GestureAction, MusicConfig, AnimationEasing, ScatterShape, GatherShape } from '../../types';
 import { PRESET_MUSIC } from '../../types';
 import { isMobile } from '../../utils/helpers';
 import { TITLE_FONTS } from './TitleOverlay';
 import { 
   TreePine, Sparkles, Heart, Type, X, Settings,
-  TreeDeciduous, Lightbulb, Gift, Ribbon, Snowflake, CloudFog, Star, Rainbow, Bot, Hand, Music, Upload
+  TreeDeciduous, Lightbulb, Gift, Ribbon, Snowflake, CloudFog, Star, Rainbow, Bot, Hand, Music, Upload, Zap
 } from 'lucide-react';
+
+// 动画缓动选项
+const animationEasingOptions: { value: AnimationEasing; label: string; desc: string }[] = [
+  { value: 'linear', label: '线性', desc: '匀速运动' },
+  { value: 'easeIn', label: '渐入', desc: '先慢后快' },
+  { value: 'easeOut', label: '渐出', desc: '先快后慢' },
+  { value: 'easeInOut', label: '渐入渐出', desc: '两头慢中间快' },
+  { value: 'bounce', label: '弹跳', desc: '到达时弹跳' },
+  { value: 'elastic', label: '弹性', desc: '弹性回弹效果' },
+];
+
+// 散开形状选项
+const scatterShapeOptions: { value: ScatterShape; label: string; desc: string }[] = [
+  { value: 'sphere', label: '球形', desc: '随机球形分布' },
+  { value: 'explosion', label: '爆炸', desc: '从中心向外辐射' },
+  { value: 'spiral', label: '螺旋', desc: '螺旋上升分布' },
+  { value: 'rain', label: '雨滴', desc: '从上方飘落' },
+  { value: 'ring', label: '环形', desc: '环绕分布' },
+];
+
+// 聚合形状选项
+const gatherShapeOptions: { value: GatherShape; label: string; desc: string }[] = [
+  { value: 'direct', label: '直接', desc: '同时聚合' },
+  { value: 'stack', label: '搭积木', desc: '从下往上堆叠' },
+  { value: 'spiralIn', label: '螺旋', desc: '螺旋旋转聚合' },
+  { value: 'implode', label: '向心', desc: '从外向内收缩' },
+  { value: 'waterfall', label: '瀑布', desc: '从上往下落' },
+  { value: 'wave', label: '波浪', desc: '波浪式扫过' },
+];
 
 // 手势动作选项
 const gestureActionOptions: { value: GestureAction; label: string }[] = [
@@ -253,6 +282,144 @@ export const SettingsPanel = ({ config, onChange, onClose, aiEnabled, onAiToggle
           <span>显示树叶</span>
           <input type="checkbox" checked={config.foliage.enabled} onChange={e => onChange({ ...config, foliage: { ...config.foliage, enabled: e.target.checked } })} style={{ accentColor: '#FFD700' }} />
         </div>
+      </div>
+
+      {/* 聚合/散开动画 */}
+      <div style={sectionStyle}>
+        <div style={{ ...titleStyle, display: 'flex', alignItems: 'center', gap: '6px' }}><Zap size={14} /> 动画效果</div>
+        <p style={{ fontSize: '10px', color: '#888', margin: '0 0 10px 0' }}>
+          控制聚合和散开时的动画效果
+        </p>
+        
+        {/* 缓动类型 */}
+        <div style={labelStyle}><span>动画类型</span></div>
+        <select
+          value={config.animation?.easing || 'easeInOut'}
+          onChange={e => onChange({ 
+            ...config, 
+            animation: { 
+              easing: e.target.value as AnimationEasing, 
+              speed: config.animation?.speed || 1,
+              scatterShape: config.animation?.scatterShape || 'sphere',
+              gatherShape: config.animation?.gatherShape || 'direct'
+            } 
+          })}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,215,0,0.3)',
+            borderRadius: '4px',
+            color: '#fff',
+            fontSize: '12px',
+            cursor: 'pointer',
+            marginBottom: '8px',
+            boxSizing: 'border-box'
+          }}
+        >
+          {animationEasingOptions.map(opt => (
+            <option key={opt.value} value={opt.value} style={{ background: '#222' }}>
+              {opt.label} - {opt.desc}
+            </option>
+          ))}
+        </select>
+        
+        {/* 动画速度 */}
+        <div style={{ ...labelStyle, marginTop: '8px' }}>
+          <span>动画速度: {(config.animation?.speed || 1).toFixed(1)}x</span>
+        </div>
+        <input
+          type="range"
+          min="0.3"
+          max="3"
+          step="0.1"
+          value={config.animation?.speed || 1}
+          onChange={e => onChange({ 
+            ...config, 
+            animation: { 
+              easing: config.animation?.easing || 'easeInOut', 
+              speed: Number(e.target.value),
+              scatterShape: config.animation?.scatterShape || 'sphere',
+              gatherShape: config.animation?.gatherShape || 'direct'
+            } 
+          })}
+          style={sliderStyle}
+        />
+        <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
+          0.3x 慢速 | 1x 正常 | 3x 快速
+        </p>
+        
+        {/* 散开形状 */}
+        <div style={{ ...labelStyle, marginTop: '12px' }}><span>散开形状</span></div>
+        <select
+          value={config.animation?.scatterShape || 'sphere'}
+          onChange={e => onChange({ 
+            ...config, 
+            animation: { 
+              easing: config.animation?.easing || 'easeInOut', 
+              speed: config.animation?.speed || 1,
+              scatterShape: e.target.value as ScatterShape,
+              gatherShape: config.animation?.gatherShape || 'direct'
+            } 
+          })}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,215,0,0.3)',
+            borderRadius: '4px',
+            color: '#fff',
+            fontSize: '12px',
+            cursor: 'pointer',
+            marginBottom: '4px',
+            boxSizing: 'border-box'
+          }}
+        >
+          {scatterShapeOptions.map(opt => (
+            <option key={opt.value} value={opt.value} style={{ background: '#222' }}>
+              {opt.label} - {opt.desc}
+            </option>
+          ))}
+        </select>
+        <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
+          粒子散开时的初始分布形状
+        </p>
+        
+        {/* 聚合形状 */}
+        <div style={{ ...labelStyle, marginTop: '12px' }}><span>聚合形状</span></div>
+        <select
+          value={config.animation?.gatherShape || 'direct'}
+          onChange={e => onChange({ 
+            ...config, 
+            animation: { 
+              easing: config.animation?.easing || 'easeInOut', 
+              speed: config.animation?.speed || 1,
+              scatterShape: config.animation?.scatterShape || 'sphere',
+              gatherShape: e.target.value as GatherShape
+            } 
+          })}
+          style={{
+            width: '100%',
+            padding: '8px',
+            background: 'rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,215,0,0.3)',
+            borderRadius: '4px',
+            color: '#fff',
+            fontSize: '12px',
+            cursor: 'pointer',
+            marginBottom: '4px',
+            boxSizing: 'border-box'
+          }}
+        >
+          {gatherShapeOptions.map(opt => (
+            <option key={opt.value} value={opt.value} style={{ background: '#222' }}>
+              {opt.label} - {opt.desc}
+            </option>
+          ))}
+        </select>
+        <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
+          粒子聚合时的动画效果
+        </p>
       </div>
 
       {/* 彩灯 */}
