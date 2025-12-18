@@ -274,6 +274,65 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
     sanitized.preloadText = sanitizeBoolean(cfg.preloadText, false);
   }
   
+  // 树顶星星/头像配置
+  if (cfg.topStar && typeof cfg.topStar === 'object') {
+    const ts = cfg.topStar as Record<string, unknown>;
+    const topStar: Record<string, unknown> = {};
+    if (ts.avatarUrl) {
+      const avatarImg = sanitizeBase64Image(ts.avatarUrl);
+      if (avatarImg) topStar.avatarUrl = avatarImg;
+    }
+    if (Object.keys(topStar).length > 0) {
+      sanitized.topStar = topStar;
+    }
+  }
+  
+  // 开场文案配置
+  if (cfg.intro && typeof cfg.intro === 'object') {
+    const intro = cfg.intro as Record<string, unknown>;
+    sanitized.intro = {
+      enabled: sanitizeBoolean(intro.enabled, false),
+      text: sanitizeText(intro.text, 100) || '献给最特别的你',
+      subText: intro.subText ? sanitizeText(intro.subText, 100) : undefined,
+      duration: sanitizeNumber(intro.duration, 2000, 15000, 4000)
+    };
+  }
+  
+  // 音乐配置
+  if (cfg.music && typeof cfg.music === 'object') {
+    const m = cfg.music as Record<string, unknown>;
+    sanitized.music = {
+      selected: sanitizeText(m.selected, 50) || 'christmas-stars',
+      volume: sanitizeNumber(m.volume, 0, 1, 0.5)
+    };
+    // 自定义音乐 URL（base64）
+    if (m.customUrl && typeof m.customUrl === 'string') {
+      // 验证是否为 audio data URL
+      if (m.customUrl.startsWith('data:audio/')) {
+        (sanitized.music as Record<string, unknown>).customUrl = m.customUrl;
+      }
+    }
+  }
+  
+  // 手势配置
+  if (cfg.gestures && typeof cfg.gestures === 'object') {
+    const g = cfg.gestures as Record<string, unknown>;
+    const allowedActions = ['none', 'formed', 'chaos', 'heart', 'text', 'music', 'screenshot', 'reset'];
+    const gestureKeys = ['Closed_Fist', 'Open_Palm', 'Pointing_Up', 'Thumb_Down', 'Thumb_Up', 'Victory', 'ILoveYou'];
+    const gestures: Record<string, string> = {};
+    
+    for (const key of gestureKeys) {
+      const action = g[key];
+      if (typeof action === 'string' && allowedActions.includes(action)) {
+        gestures[key] = action;
+      }
+    }
+    
+    if (Object.keys(gestures).length > 0) {
+      sanitized.gestures = gestures;
+    }
+  }
+  
   return sanitized;
 };
 

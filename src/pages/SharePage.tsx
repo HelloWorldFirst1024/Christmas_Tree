@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Experience, GestureController, TitleOverlay, WelcomeTutorial } from '../components';
+import { Experience, GestureController, TitleOverlay, WelcomeTutorial, IntroOverlay } from '../components';
 import { CHRISTMAS_MUSIC_URL } from '../config';
 import { isMobile } from '../utils/helpers';
 import { sanitizeShareConfig, sanitizePhotos, sanitizeText } from '../utils/sanitize';
@@ -68,6 +68,9 @@ export default function SharePage({ shareId }: SharePageProps) {
   });
   const [hideTree, setHideTree] = useState(false);
   const [preloadTextPlayed, setPreloadTextPlayed] = useState(false);
+  
+  // 开场文案状态
+  const [introShown, setIntroShown] = useState(false);
 
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -343,6 +346,16 @@ export default function SharePage({ shareId }: SharePageProps) {
 
   return (
     <div style={{ width: '100vw', height: '100dvh', backgroundColor: '#000', position: 'fixed', top: 0, left: 0, overflow: 'hidden', touchAction: 'none' }}>
+      {/* 开场文案 */}
+      {sceneConfig.intro?.enabled && !introShown && (
+        <IntroOverlay
+          text={sceneConfig.intro.text}
+          subText={sceneConfig.intro.subText}
+          duration={sceneConfig.intro.duration}
+          onComplete={() => setIntroShown(true)}
+        />
+      )}
+
       {/* 3D Canvas - 教程显示时暂停渲染 */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
