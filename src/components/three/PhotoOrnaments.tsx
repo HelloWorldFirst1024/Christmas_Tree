@@ -161,9 +161,9 @@ export const PhotoOrnaments = ({
     });
   }, [textures, count, scatterShape, gatherShape]);
 
-  const animSpeed = Math.max(0.5, Math.min(3, speed)) * 1.5;
+  // 动画持续时间（秒），speed 越大越快
+  const duration = 1 / Math.max(0.3, Math.min(3, speed));
   const easeFn = easingFunctions[easing] || easingFunctions.easeInOut;
-  const directionRef = useRef(1); // 1=聚合, -1=散开
 
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
@@ -171,15 +171,17 @@ export const PhotoOrnaments = ({
     const time = stateObj.clock.elapsedTime;
     const camera = stateObj.camera;
     
-    // 更新动画进度（非选中状态时使用缓动）
+    // 更新动画进度
     const targetProgress = isFormed ? 1 : 0;
     
-    // 记录动画方向
-    if (targetProgress > progressRef.current) directionRef.current = 1;
-    else if (targetProgress < progressRef.current) directionRef.current = -1;
-    
-    progressRef.current += (targetProgress - progressRef.current) * delta * animSpeed;
-    const rawT = Math.max(0, Math.min(1, progressRef.current));
+    // 线性插值进度，基于持续时间
+    const step = delta / duration;
+    if (targetProgress > progressRef.current) {
+      progressRef.current = Math.min(targetProgress, progressRef.current + step);
+    } else if (targetProgress < progressRef.current) {
+      progressRef.current = Math.max(targetProgress, progressRef.current - step);
+    }
+    const rawT = progressRef.current;
 
     groupRef.current.children.forEach((group, i) => {
       const objData = data[i];
@@ -196,14 +198,14 @@ export const PhotoOrnaments = ({
         objData.currentPos.lerp(target, delta * 8);
         group.position.copy(objData.currentPos);
       } else {
-        // 非选中时使用缓动函数，根据聚合延迟计算进度
+        // 统一使用基于延迟的进度计算，确保打断时位置连续
+        const delay = objData.gatherDelay;
         let elementT: number;
-        if (directionRef.current > 0) {
-          const delayedProgress = Math.max(0, Math.min(1, (rawT - objData.gatherDelay) / (1 - objData.gatherDelay + 0.001)));
-          elementT = easeFn(delayedProgress);
+        if (delay === 0) {
+          elementT = easeFn(rawT);
         } else {
-          const reverseDelay = Math.max(0, Math.min(1, (rawT - (1 - objData.gatherDelay - 0.3)) / (objData.gatherDelay + 0.3 + 0.001)));
-          elementT = 1 - easeFn(1 - reverseDelay);
+          const adjustedT = Math.max(0, Math.min(1, (rawT - delay * 0.5) / (1 - delay * 0.5)));
+          elementT = easeFn(adjustedT);
         }
         targetScale = objData.scale;
         group.position.lerpVectors(objData.chaosPos, objData.targetPos, elementT);

@@ -134,34 +134,35 @@ export const GiftPile = ({
     return items;
   }, [count, scatterShape, gatherShape]);
 
-  const animSpeed = Math.max(0.5, Math.min(3, speed)) * 1.5;
+  // 动画持续时间（秒），speed 越大越快
+  const duration = 1 / Math.max(0.3, Math.min(3, speed));
   const easeFn = easingFunctions[easing] || easingFunctions.easeInOut;
-  const directionRef = useRef(1); // 1=聚合, -1=散开
 
   useFrame((_, delta) => {
     if (!groupRef.current) return;
     const isFormed = state === 'FORMED';
     const targetProgress = isFormed ? 1 : 0;
     
-    // 记录动画方向
-    if (targetProgress > progressRef.current) directionRef.current = 1;
-    else if (targetProgress < progressRef.current) directionRef.current = -1;
-    
-    // 平滑过渡进度
-    progressRef.current += (targetProgress - progressRef.current) * delta * animSpeed;
-    const rawT = Math.max(0, Math.min(1, progressRef.current));
+    // 线性插值进度，基于持续时间
+    const step = delta / duration;
+    if (targetProgress > progressRef.current) {
+      progressRef.current = Math.min(targetProgress, progressRef.current + step);
+    } else if (targetProgress < progressRef.current) {
+      progressRef.current = Math.max(targetProgress, progressRef.current - step);
+    }
+    const rawT = progressRef.current;
     
     groupRef.current.children.forEach((child, i) => {
       const gift = gifts[i];
       
-      // 根据聚合延迟计算每个元素的进度
+      // 统一使用基于延迟的进度计算，确保打断时位置连续
+      const delay = gift.gatherDelay;
       let elementT: number;
-      if (directionRef.current > 0) {
-        const delayedProgress = Math.max(0, Math.min(1, (rawT - gift.gatherDelay) / (1 - gift.gatherDelay + 0.001)));
-        elementT = easeFn(delayedProgress);
+      if (delay === 0) {
+        elementT = easeFn(rawT);
       } else {
-        const reverseDelay = Math.max(0, Math.min(1, (rawT - (1 - gift.gatherDelay - 0.3)) / (gift.gatherDelay + 0.3 + 0.001)));
-        elementT = 1 - easeFn(1 - reverseDelay);
+        const adjustedT = Math.max(0, Math.min(1, (rawT - delay * 0.5) / (1 - delay * 0.5)));
+        elementT = easeFn(adjustedT);
       }
       
       // 使用缓动函数插值位置
