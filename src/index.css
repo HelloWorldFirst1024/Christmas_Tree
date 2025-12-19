@@ -81,3 +81,16 @@ button:focus-visible {
 .spin {
   animation: spin 1s linear infinite;
 }
+
+/* Fade out animation for demo mode hint */
+@keyframes fadeOut {
+  0% {
+    opacity: 1;
+  }
+  70% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

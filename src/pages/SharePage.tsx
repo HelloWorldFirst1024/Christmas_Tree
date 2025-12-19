@@ -3,14 +3,14 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Experience, GestureController, TitleOverlay, WelcomeTutorial, IntroOverlay, CenterPhoto, CSSTextEffect, LyricsDisplay, photoScreenPositions } from '../components';
 import { CHRISTMAS_MUSIC_URL } from '../config';
-import { isMobile, isTablet } from '../utils/helpers';
+import { isMobile, isTablet, getDefaultSceneConfig, toggleFullscreen, isFullscreen, isFullscreenSupported, enterFullscreen, lockLandscape } from '../utils/helpers';
 import { sanitizeShareConfig, sanitizePhotos, sanitizeText } from '../utils/sanitize';
 import { getShare } from '../lib/r2';
 import type { ShareData } from '../lib/r2';
 import type { SceneState, SceneConfig } from '../types';
 import { PRESET_MUSIC } from '../types';
 import { useTimeline } from '../hooks/useTimeline';
-import { Volume2, VolumeX, TreePine, Sparkles, Loader, Frown, HelpCircle, Play } from 'lucide-react';
+import { Volume2, VolumeX, TreePine, Sparkles, Loader, Frown, HelpCircle, Play, Maximize, Minimize, RotateCcw } from 'lucide-react';
 
 // 检测文字是否包含中文
 const containsChinese = (text: string): boolean => /[\u4e00-\u9fa5]/.test(text);
@@ -97,19 +97,18 @@ export default function SharePage({ shareId }: SharePageProps) {
   const textTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textSwitchRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // 从分享数据加载配置
-  const [sceneConfig, setSceneConfig] = useState<SceneConfig>({
-    foliage: { enabled: true, count: mobile ? 5000 : 15000, color: '#00FF88', size: 1, glow: 1 },
-    lights: { enabled: true, count: mobile ? 100 : 400 },
-    elements: { enabled: true, count: mobile ? 150 : 500 },
-    snow: { enabled: true, count: mobile ? 500 : 2000, speed: 2, size: 0.5, opacity: 0.8 },
-    sparkles: { enabled: !mobile, count: mobile ? 0 : 600 },
-    stars: { enabled: true },
-    bloom: { enabled: true, intensity: 1.5 },
-    title: { enabled: true, text: 'Merry Christmas', size: 48 },
-    giftPile: { enabled: true, count: 18 },
-    ribbons: { enabled: true, count: mobile ? 30 : 50 },
-    fog: { enabled: true, opacity: 0.3 }
+  // 从分享数据加载配置（移动端/平板使用最低配置）
+  const [sceneConfig, setSceneConfig] = useState<SceneConfig>(() => {
+    return getDefaultSceneConfig() as unknown as SceneConfig;
+  });
+  
+  // 全屏状态
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  
+  // 全屏横屏提示状态
+  const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(() => {
+    // 移动端/平板首次访问显示提示
+    return (isMobile() || isTablet()) && isFullscreenSupported();
   });
 
   // 获取已配置的文字列表
@@ -128,6 +127,25 @@ export default function SharePage({ shareId }: SharePageProps) {
     handleTimelineComplete,
     configuredTexts
   );
+
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
 
   // 加载分享数据
   useEffect(() => {
@@ -676,6 +694,17 @@ export default function SharePage({ shareId }: SharePageProps) {
           {musicPlaying ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
 
+        {/* 全屏按钮 - 移动端/平板显示 */}
+        {(mobile || isTablet()) && isFullscreenSupported() && (
+          <button 
+            onClick={() => toggleFullscreen()} 
+            style={buttonStyle(isFullscreenMode, mobile)}
+            title={isFullscreenMode ? '退出全屏' : '全屏'}
+          >
+            {isFullscreenMode ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
+        )}
+
         <button onClick={() => setShowTutorial(true)} style={buttonStyle(false, mobile)} title="使用帮助">
           <HelpCircle size={18} />
         </button>
@@ -748,6 +777,110 @@ export default function SharePage({ shareId }: SharePageProps) {
 
       {/* 使用教程 */}
       {showTutorial && <WelcomeTutorial onClose={() => setShowTutorial(false)} isSharePage gestureConfig={sceneConfig.gestures} />}
+
+      {/* 全屏横屏提示 - 移动端/平板首次访问 */}
+      {showFullscreenPrompt && !showTutorial && !showSoundPrompt && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 250,
+          gap: '16px',
+          padding: '20px'
+        }}>
+          <div style={{ fontSize: '56px', marginBottom: '10px' }}>
+            📱
+          </div>
+          <div style={{
+            color: '#FFD700',
+            fontSize: mobile ? '20px' : '24px',
+            fontFamily: 'sans-serif',
+            textAlign: 'center',
+            fontWeight: 'bold'
+          }}>
+            获得最佳体验
+          </div>
+          <div style={{
+            color: 'rgba(255, 255, 255, 0.8)',
+            fontSize: mobile ? '14px' : '16px',
+            fontFamily: 'sans-serif',
+            textAlign: 'center',
+            maxWidth: '320px',
+            lineHeight: 1.6
+          }}>
+            建议使用全屏横屏模式观看，效果更佳！
+          </div>
+          
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '20px', width: '100%', maxWidth: '280px' }}>
+            <button
+              onClick={async () => {
+                setShowFullscreenPrompt(false);
+                // 尝试进入全屏并锁定横屏
+                const success = await enterFullscreen();
+                if (success) {
+                  setIsFullscreenMode(true);
+                  // 尝试锁定横屏（可能不支持）
+                  await lockLandscape();
+                }
+              }}
+              style={{
+                padding: '14px 24px',
+                backgroundColor: '#FFD700',
+                border: 'none',
+                borderRadius: '25px',
+                color: '#000',
+                fontSize: mobile ? '15px' : '16px',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontFamily: 'sans-serif',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 15px rgba(255, 215, 0, 0.3)'
+              }}
+            >
+              <Maximize size={18} /> 全屏横屏观看
+            </button>
+            
+            <button
+              onClick={() => setShowFullscreenPrompt(false)}
+              style={{
+                padding: '12px 20px',
+                backgroundColor: 'transparent',
+                border: '1px solid rgba(255, 255, 255, 0.3)',
+                borderRadius: '25px',
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: mobile ? '13px' : '14px',
+                cursor: 'pointer',
+                fontFamily: 'sans-serif'
+              }}
+            >
+              稍后再说
+            </button>
+          </div>
+          
+          <div style={{
+            color: 'rgba(255, 255, 255, 0.5)',
+            fontSize: '12px',
+            fontFamily: 'sans-serif',
+            textAlign: 'center',
+            marginTop: '15px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px'
+          }}>
+            <RotateCcw size={14} /> 可随时点击底部按钮切换全屏
+          </div>
+        </div>
+      )}
 
       {/* 音乐提示 - 故事线模式 */}
       {showSoundPrompt && !soundPromptDismissed && !showTutorial && (

@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, CSSTextEffect, photoScreenPositions } from './components';
 import { CHRISTMAS_MUSIC_URL } from './config';
-import { isMobile, isTablet, fileToBase64 } from './utils/helpers';
+import { isMobile, isTablet, fileToBase64, getDefaultSceneConfig, toggleFullscreen, isFullscreen, isFullscreenSupported } from './utils/helpers';
 import { useTimeline } from './hooks/useTimeline';
 import { 
   uploadShare, getLocalShare, getShareUrl, updateShare, getShare,
@@ -12,7 +12,7 @@ import {
 } from './lib/r2';
 import type { SceneState, SceneConfig, GestureConfig, GestureAction, MusicConfig } from './types';
 import { PRESET_MUSIC } from './types';
-import { Volume2, VolumeX, Camera, Settings, Wrench, Link, TreePine, Sparkles, Loader, HelpCircle, Shield, Heart, Type, Play } from 'lucide-react';
+import { Volume2, VolumeX, Camera, Settings, Wrench, Link, TreePine, Sparkles, Loader, HelpCircle, Shield, Heart, Type, Play, Maximize, Minimize } from 'lucide-react';
 
 // 检测文字是否包含中文
 const containsChinese = (text: string): boolean => /[\u4e00-\u9fa5]/.test(text);
@@ -125,35 +125,61 @@ export default function GrandTreeApp() {
   // 场景配置 - 初始化时尝试从本地读取
   const [sceneConfig, setSceneConfig] = useState<SceneConfig>(() => {
     const savedConfig = getLocalConfig();
-    const defaultConfig = {
-      foliage: { enabled: true, count: mobile ? 5000 : 15000, color: '#00FF88', size: 1, glow: 1 },
-      lights: { enabled: true, count: mobile ? 100 : 400 },
-      elements: { enabled: true, count: mobile ? 150 : 500 },
-      snow: { enabled: true, count: mobile ? 500 : 2000, speed: 2, size: 0.5, opacity: 0.8 },
-      sparkles: { enabled: !mobile, count: mobile ? 0 : 600 },
-      stars: { enabled: true },
-      bloom: { enabled: true, intensity: 1.5 },
-      title: { enabled: true, text: 'Merry Christmas', size: 48 },
-      giftPile: { enabled: true, count: 18 },
-      ribbons: { enabled: true, count: mobile ? 30 : 50 },
-      fog: { enabled: true, opacity: 0.3 },
-      music: defaultMusic,
-      gestures: defaultGestures,
-      gestureText: 'MERRY CHRISTMAS',
-      gestureEffect: {
-        duration: 5000,
-        hideTree: true,
-        textCount: 1000,
-        heartCount: 1500
-      }
-    };
+    // 使用统一的默认配置函数（移动端/平板自动使用最低配置）
+    const defaultConfig = getDefaultSceneConfig() as unknown as SceneConfig;
     
     if (savedConfig) {
       // 深度合并配置，确保所有字段都有值
-      return deepMergeConfig(defaultConfig, savedConfig as Partial<SceneConfig>);
+      return deepMergeConfig(defaultConfig as unknown as Record<string, unknown>, savedConfig as Record<string, unknown>) as unknown as SceneConfig;
     }
     return defaultConfig;
   });
+  
+  // 全屏状态
+  const [isFullscreenMode, setIsFullscreenMode] = useState(false);
+  
+  // 演示模式状态（隐藏鼠标和所有UI）
+  const [demoMode, setDemoMode] = useState(false);
+  
+  // 监听全屏状态变化
+  useEffect(() => {
+    const handleFullscreenChange = () => {
+      setIsFullscreenMode(isFullscreen());
+    };
+    
+    document.addEventListener('fullscreenchange', handleFullscreenChange);
+    document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+    document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+    document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+    
+    return () => {
+      document.removeEventListener('fullscreenchange', handleFullscreenChange);
+      document.removeEventListener('webkitfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('mozfullscreenchange', handleFullscreenChange);
+      document.removeEventListener('MSFullscreenChange', handleFullscreenChange);
+    };
+  }, []);
+  
+  // 演示模式键盘监听：D 进入，Esc 退出（基础监听，不依赖其他函数）
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // D 键进入演示模式
+      if (e.key === 'd' || e.key === 'D') {
+        // 如果正在输入文字，不触发
+        if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+          return;
+        }
+        setDemoMode(true);
+      }
+      // Esc 键退出演示模式
+      if (e.key === 'Escape') {
+        setDemoMode(false);
+      }
+    };
+    
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // 初始化照片
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -532,6 +558,34 @@ export default function GrandTreeApp() {
     }
   }, [timeline.state.isPlaying, sceneConfig.timeline?.music, sceneConfig.music?.selected]);
 
+  // 演示模式下的快捷键
+  useEffect(() => {
+    if (!demoMode) return;
+    
+    const handleDemoKeyDown = (e: KeyboardEvent) => {
+      // 空格键切换聚合/散开
+      if (e.key === ' ') {
+        e.preventDefault();
+        setSceneState(s => s === 'CHAOS' ? 'FORMED' : 'CHAOS');
+      }
+      // H 键显示爱心
+      if (e.key === 'h' || e.key === 'H') {
+        triggerEffect('heart');
+      }
+      // T 键显示文字
+      if (e.key === 't' || e.key === 'T') {
+        triggerEffect('text');
+      }
+      // M 键切换音乐
+      if (e.key === 'm' || e.key === 'M') {
+        toggleMusic();
+      }
+    };
+    
+    document.addEventListener('keydown', handleDemoKeyDown);
+    return () => document.removeEventListener('keydown', handleDemoKeyDown);
+  }, [demoMode, triggerEffect, toggleMusic]);
+
   // 分享状态
   const [isSharing, setIsSharing] = useState(false);
   
@@ -717,7 +771,17 @@ export default function GrandTreeApp() {
   }, [uploadedPhotos, sceneConfig, showModal]);
 
   return (
-    <div style={{ width: '100vw', height: '100dvh', backgroundColor: '#000', position: 'fixed', top: 0, left: 0, overflow: 'hidden', touchAction: 'none' }}>
+    <div style={{ 
+      width: '100vw', 
+      height: '100dvh', 
+      backgroundColor: '#000', 
+      position: 'fixed', 
+      top: 0, 
+      left: 0, 
+      overflow: 'hidden', 
+      touchAction: 'none',
+      cursor: demoMode ? 'none' : 'auto'
+    }}>
       {/* 开场文案 - 时间轴模式下由时间轴控制 */}
       {!sceneConfig.timeline?.enabled && sceneConfig.intro?.enabled && !introShown && (
         <IntroOverlay
@@ -863,14 +927,14 @@ export default function GrandTreeApp() {
         />
       )}
 
-      {/* 底部按钮 */}
+      {/* 底部按钮 - 演示模式下隐藏 */}
       <div style={{
         position: 'fixed',
         bottom: mobile ? 'max(20px, env(safe-area-inset-bottom))' : '30px',
         right: mobile ? '10px' : '40px',
         left: mobile ? '10px' : 'auto',
         zIndex: 100,
-        display: 'flex',
+        display: demoMode ? 'none' : 'flex',
         gap: mobile ? '8px' : '10px',
         justifyContent: mobile ? 'center' : 'flex-end',
         flexWrap: 'wrap',
@@ -879,6 +943,17 @@ export default function GrandTreeApp() {
         <button onClick={toggleMusic} style={buttonStyle(musicPlaying, mobile)}>
           {musicPlaying ? <Volume2 size={18} /> : <VolumeX size={18} />}
         </button>
+
+        {/* 全屏按钮 - 移动端/平板显示 */}
+        {(mobile || isTablet()) && isFullscreenSupported() && (
+          <button 
+            onClick={() => toggleFullscreen()} 
+            style={buttonStyle(isFullscreenMode, mobile)}
+            title={isFullscreenMode ? '退出全屏' : '全屏'}
+          >
+            {isFullscreenMode ? <Minimize size={18} /> : <Maximize size={18} />}
+          </button>
+        )}
 
         {!isShareMode && (
           <>
@@ -947,32 +1022,55 @@ export default function GrandTreeApp() {
         )}
       </div>
 
-      {/* AI 状态 */}
-      <div style={{
-        position: 'absolute',
-        top: '20px',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        color: aiStatus.includes('ERROR') || aiStatus.includes('DISABLED') ? '#888' : 'rgba(255, 215, 0, 0.4)',
-        fontSize: '10px',
-        letterSpacing: '2px',
-        zIndex: 10,
-        background: 'rgba(0,0,0,0.5)',
-        padding: '4px 8px',
-        borderRadius: '4px'
-      }}>
-        {aiStatus} {currentGesture && `| ${currentGesture}`}
-      </div>
+      {/* AI 状态 - 演示模式下隐藏 */}
+      {!demoMode && (
+        <div style={{
+          position: 'absolute',
+          top: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          color: aiStatus.includes('ERROR') || aiStatus.includes('DISABLED') ? '#888' : 'rgba(255, 215, 0, 0.4)',
+          fontSize: '10px',
+          letterSpacing: '2px',
+          zIndex: 10,
+          background: 'rgba(0,0,0,0.5)',
+          padding: '4px 8px',
+          borderRadius: '4px'
+        }}>
+          {aiStatus} {currentGesture && `| ${currentGesture}`}
+        </div>
+      )}
 
-      {/* 标题 */}
+      {/* 标题 - 演示模式下保留标题 */}
       <TitleOverlay 
         text={sceneConfig.title?.text || 'Merry Christmas'} 
-        enabled={sceneConfig.title?.enabled ?? true} 
+        enabled={(sceneConfig.title?.enabled ?? true)} 
         size={sceneConfig.title?.size || 48}
         font={sceneConfig.title?.font || 'Mountains of Christmas'}
         color={sceneConfig.title?.color || '#FFD700'}
         shadowColor={sceneConfig.title?.shadowColor}
       />
+      
+      {/* 演示模式提示 - 进入时短暂显示 */}
+      {demoMode && (
+        <div style={{
+          position: 'fixed',
+          bottom: '20px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          color: 'rgba(255, 215, 0, 0.6)',
+          fontSize: '12px',
+          fontFamily: 'sans-serif',
+          zIndex: 200,
+          background: 'rgba(0,0,0,0.7)',
+          padding: '8px 16px',
+          borderRadius: '20px',
+          animation: 'fadeOut 3s forwards',
+          pointerEvents: 'none'
+        }}>
+          演示模式 | 空格:聚合/散开 H:爱心 T:文字 M:音乐 Esc:退出
+        </div>
+      )}
 
       {/* 歌词显示 */}
       <LyricsDisplay

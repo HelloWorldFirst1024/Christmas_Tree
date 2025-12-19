@@ -49,6 +49,7 @@ export interface MusicConfig {
 export const PRESET_MUSIC = [
   { id: 'christmas-stars', name: '🎵 Christmas Stars (纯音乐)', url: '/music/mixkit-christmas-stars-866.mp3', lrc: '' },
   { id: 'all-i-want', name: '🎄 All I Want for Christmas Is You', url: '/music/All I Want for Christmas Is You - Mariah Carey.mp3', lrc: '/music/All I Want for Christmas Is You - Mariah Carey.lrc' },
+  { id: 'last-christmas', name: '🎅 Last Christmas (圣诞节版)', url: '/music/Last Christmas (圣诞节版) - DreamSky.mp3', lrc: '/music/Last Christmas (圣诞节版) - DreamSky.lrc' },
   { id: 'christmas-list', name: '📝 Christmas List', url: '/music/Christmas List - Anson Seabra.mp3', lrc: '/music/Christmas List - Anson Seabra.lrc' },
   { id: 'i-love-you-so', name: '💕 I Love You So', url: '/music/I Love You So - The Walters.mp3', lrc: '/music/I Love You So - The Walters.lrc' },
   { id: 'yi-dian-dian', name: '✨ 一点点 (为什么晚上总是有星星)', url: '/music/一点点 (为什么晚上总是有星星) - 董唧唧、芊芊龍.mp3', lrc: '/music/一点点 (为什么晚上总是有星星) - 董唧唧、芊芊龍.lrc' },
