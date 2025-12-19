@@ -169,33 +169,55 @@ export const PhotoOrnaments = ({
   const chaosTransitionRef = useRef(1);
   const prevScatterShapeRef = useRef(scatterShape);
 
-  useMemo(() => {
-    textures.forEach((texture: THREE.Texture) => {
+  // 处理纹理并获取宽高比
+  const textureData = useMemo(() => {
+    return textures.map((texture: THREE.Texture) => {
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
       texture.generateMipmaps = false;
       texture.needsUpdate = true;
+      
+      // 获取图片的实际宽高比
+      const image = texture.image;
+      const aspectRatio = image ? image.width / image.height : 1;
+      return { texture, aspectRatio };
     });
   }, [textures]);
 
-  // 相框样式：照片 + 外框 + 内衬
-  const photoSize = 1 * photoScale;
+  // 相框样式参数
+  const baseSize = 1 * photoScale;
   const innerBorder = 0.03 * photoScale; // 内衬宽度（深色）
   const outerBorder = 0.08 * photoScale; // 外框宽度
-  const innerSize = photoSize + innerBorder * 2;
-  const frameSize = innerSize + outerBorder * 2;
-  const photoGeometry = useMemo(
-    () => new THREE.PlaneGeometry(photoSize, photoSize),
-    [photoSize]
-  );
-  const innerGeometry = useMemo(
-    () => new THREE.PlaneGeometry(innerSize, innerSize),
-    [innerSize]
-  );
-  const frameGeometry = useMemo(
-    () => new THREE.PlaneGeometry(frameSize, frameSize),
-    [frameSize]
-  );
+  
+  // 为每张照片创建对应比例的几何体
+  const geometries = useMemo(() => {
+    return textureData.map(({ aspectRatio }) => {
+      // 根据宽高比计算实际尺寸，保持面积大致相同
+      let photoWidth: number, photoHeight: number;
+      if (aspectRatio >= 1) {
+        // 横图
+        photoWidth = baseSize * Math.sqrt(aspectRatio);
+        photoHeight = baseSize / Math.sqrt(aspectRatio);
+      } else {
+        // 竖图
+        photoWidth = baseSize * Math.sqrt(aspectRatio);
+        photoHeight = baseSize / Math.sqrt(aspectRatio);
+      }
+      
+      const innerWidth = photoWidth + innerBorder * 2;
+      const innerHeight = photoHeight + innerBorder * 2;
+      const frameWidth = innerWidth + outerBorder * 2;
+      const frameHeight = innerHeight + outerBorder * 2;
+      
+      return {
+        photo: new THREE.PlaneGeometry(photoWidth, photoHeight),
+        inner: new THREE.PlaneGeometry(innerWidth, innerHeight),
+        frame: new THREE.PlaneGeometry(frameWidth, frameHeight),
+        aspectRatio
+      };
+    });
+  }, [textureData, baseSize, innerBorder, outerBorder]);
+  
   // 计算内衬颜色（比相框颜色深一点）
   const innerColor = useMemo(() => {
     const color = new THREE.Color(frameColor);
@@ -375,54 +397,57 @@ export const PhotoOrnaments = ({
 
   return (
     <group ref={groupRef}>
-      {data.map((obj, i) => (
-        <group
-          key={i}
-          position={getInitialPosition(i)}
-          scale={[obj.scale, obj.scale, obj.scale]}
-          rotation={state === 'CHAOS' ? obj.chaosRotation : [0, 0, 0]}
-          onClick={() => onPhotoClick?.(selectedIndex === i ? null : i)}
-        >
-          {/* 正面 */}
-          <group position={[0, 0, 0.02]}>
-            {/* 外框 */}
-            <mesh geometry={frameGeometry} position={[0, 0, -0.02]}>
-              <meshBasicMaterial color={frameColor} side={THREE.FrontSide} />
-            </mesh>
-            {/* 内衬 */}
-            <mesh geometry={innerGeometry} position={[0, 0, -0.01]}>
-              <meshBasicMaterial color={innerColor} side={THREE.FrontSide} />
-            </mesh>
-            {/* 照片 */}
-            <mesh geometry={photoGeometry}>
-              <meshBasicMaterial
-                map={textures[obj.textureIndex]}
-                side={THREE.FrontSide}
-                toneMapped={false}
-              />
-            </mesh>
+      {data.map((obj, i) => {
+        const geo = geometries[obj.textureIndex];
+        return (
+          <group
+            key={i}
+            position={getInitialPosition(i)}
+            scale={[obj.scale, obj.scale, obj.scale]}
+            rotation={state === 'CHAOS' ? obj.chaosRotation : [0, 0, 0]}
+            onClick={() => onPhotoClick?.(selectedIndex === i ? null : i)}
+          >
+            {/* 正面 */}
+            <group position={[0, 0, 0.02]}>
+              {/* 外框 */}
+              <mesh geometry={geo.frame} position={[0, 0, -0.02]}>
+                <meshBasicMaterial color={frameColor} side={THREE.FrontSide} />
+              </mesh>
+              {/* 内衬 */}
+              <mesh geometry={geo.inner} position={[0, 0, -0.01]}>
+                <meshBasicMaterial color={innerColor} side={THREE.FrontSide} />
+              </mesh>
+              {/* 照片 */}
+              <mesh geometry={geo.photo}>
+                <meshBasicMaterial
+                  map={textureData[obj.textureIndex].texture}
+                  side={THREE.FrontSide}
+                  toneMapped={false}
+                />
+              </mesh>
+            </group>
+            {/* 背面 */}
+            <group position={[0, 0, -0.02]} rotation={[0, Math.PI, 0]}>
+              {/* 外框 */}
+              <mesh geometry={geo.frame} position={[0, 0, -0.02]}>
+                <meshBasicMaterial color={frameColor} side={THREE.FrontSide} />
+              </mesh>
+              {/* 内衬 */}
+              <mesh geometry={geo.inner} position={[0, 0, -0.01]}>
+                <meshBasicMaterial color={innerColor} side={THREE.FrontSide} />
+              </mesh>
+              {/* 照片 */}
+              <mesh geometry={geo.photo}>
+                <meshBasicMaterial
+                  map={textureData[obj.textureIndex].texture}
+                  side={THREE.FrontSide}
+                  toneMapped={false}
+                />
+              </mesh>
+            </group>
           </group>
-          {/* 背面 */}
-          <group position={[0, 0, -0.02]} rotation={[0, Math.PI, 0]}>
-            {/* 外框 */}
-            <mesh geometry={frameGeometry} position={[0, 0, -0.02]}>
-              <meshBasicMaterial color={frameColor} side={THREE.FrontSide} />
-            </mesh>
-            {/* 内衬 */}
-            <mesh geometry={innerGeometry} position={[0, 0, -0.01]}>
-              <meshBasicMaterial color={innerColor} side={THREE.FrontSide} />
-            </mesh>
-            {/* 照片 */}
-            <mesh geometry={photoGeometry}>
-              <meshBasicMaterial
-                map={textures[obj.textureIndex]}
-                side={THREE.FrontSide}
-                toneMapped={false}
-              />
-            </mesh>
-          </group>
-        </group>
-      ))}
+        );
+      })}
     </group>
   );
 };

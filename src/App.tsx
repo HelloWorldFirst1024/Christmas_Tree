@@ -171,7 +171,7 @@ export default function GrandTreeApp() {
         }
         setDemoMode(true);
       }
-      // Esc 键退出演示模式
+      // Esc 键退出演示模式（指针锁定退出时也会触发）
       if (e.key === 'Escape') {
         setDemoMode(false);
       }
@@ -180,6 +180,10 @@ export default function GrandTreeApp() {
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, []);
+  
+
+  
+
 
   // 初始化照片
   const [configLoaded, setConfigLoaded] = useState(false);
@@ -580,11 +584,36 @@ export default function GrandTreeApp() {
       if (e.key === 'm' || e.key === 'M') {
         toggleMusic();
       }
+      // 数字键 1-9 选择照片，0 取消选择
+      if (e.key >= '1' && e.key <= '9') {
+        const photoIndex = parseInt(e.key) - 1;
+        if (photoIndex < uploadedPhotos.length) {
+          setSelectedPhotoIndex(photoIndex);
+        }
+      }
+      if (e.key === '0') {
+        setSelectedPhotoIndex(null);
+      }
+      // 左右方向键切换照片
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        if (uploadedPhotos.length > 0) {
+          setSelectedPhotoIndex(prev => {
+            if (prev === null) {
+              return e.key === 'ArrowRight' ? 0 : uploadedPhotos.length - 1;
+            }
+            if (e.key === 'ArrowRight') {
+              return (prev + 1) % uploadedPhotos.length;
+            } else {
+              return (prev - 1 + uploadedPhotos.length) % uploadedPhotos.length;
+            }
+          });
+        }
+      }
     };
     
     document.addEventListener('keydown', handleDemoKeyDown);
     return () => document.removeEventListener('keydown', handleDemoKeyDown);
-  }, [demoMode, triggerEffect, toggleMusic]);
+  }, [demoMode, triggerEffect, toggleMusic, uploadedPhotos.length]);
 
   // 分享状态
   const [isSharing, setIsSharing] = useState(false);
@@ -1068,7 +1097,7 @@ export default function GrandTreeApp() {
           animation: 'fadeOut 3s forwards',
           pointerEvents: 'none'
         }}>
-          演示模式 | 空格:聚合/散开 H:爱心 T:文字 M:音乐 Esc:退出
+          演示模式 | 空格:聚合/散开 H:爱心 T:文字 M:音乐 1-9:选图 ←→:切换 0:取消 Esc:退出
         </div>
       )}
 

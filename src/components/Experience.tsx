@@ -61,9 +61,11 @@ export const Experience = ({
   zoomDelta = 0
 }: ExperienceProps) => {
   const controlsRef = useRef<any>(null);
-  const isPhotoSelected = selectedPhotoIndex !== null;
   const mobile = isMobile();
   const prevSceneStateRef = useRef<SceneState>(sceneState);
+  // 记录上一帧的相机角度，用于检测视角移动
+  const lastAzimuthRef = useRef<number>(0);
+  const lastPolarRef = useRef<number>(0);
 
   // 确保 config 有新字段的默认值
   const safeConfig = {
@@ -82,9 +84,24 @@ export const Experience = ({
   };
 
   useFrame((state, delta) => {
-    if (controlsRef.current && !isPhotoSelected) {
+    if (controlsRef.current) {
       const isFormed = sceneState === 'FORMED';
       const isChaos = sceneState === 'CHAOS';
+      
+      // 检测视角是否移动，如果移动则取消选中照片
+      const currentAzimuth = controlsRef.current.getAzimuthalAngle();
+      const currentPolar = controlsRef.current.getPolarAngle();
+      const azimuthDelta = Math.abs(currentAzimuth - lastAzimuthRef.current);
+      const polarDelta = Math.abs(currentPolar - lastPolarRef.current);
+      
+      // 如果视角移动超过阈值，取消选中照片
+      if (selectedPhotoIndex !== null && (azimuthDelta > 0.02 || polarDelta > 0.02)) {
+        onPhotoSelect(null);
+      }
+      
+      // 更新上一帧的角度
+      lastAzimuthRef.current = currentAzimuth;
+      lastPolarRef.current = currentPolar;
       
       // 状态切换时的视角处理
       if (prevSceneStateRef.current !== sceneState) {
@@ -100,10 +117,9 @@ export const Experience = ({
         prevSceneStateRef.current = sceneState;
       }
       
-      // 聚合时平滑过渡到正对视角
-      if (isFormed && !palmMove) {
+      // 聚合时平滑过渡到正对视角（没有选中照片时）
+      if (isFormed && !palmMove && selectedPhotoIndex === null) {
         const targetPolar = Math.PI / 2.2; // 稍微俯视的角度
-        const currentPolar = controlsRef.current.getPolarAngle();
         const polarDiff = targetPolar - currentPolar;
         if (Math.abs(polarDiff) > 0.01) {
           controlsRef.current.setPolarAngle(currentPolar + polarDiff * delta * 2);
@@ -112,8 +128,6 @@ export const Experience = ({
       
       // 手掌滑动控制视角
       if (palmMove && (Math.abs(palmMove.x) > 0.001 || Math.abs(palmMove.y) > 0.001)) {
-        const currentAzimuth = controlsRef.current.getAzimuthalAngle();
-        const currentPolar = controlsRef.current.getPolarAngle();
         controlsRef.current.setAzimuthalAngle(currentAzimuth + palmMove.x);
         // 散开时不限制极角，聚合时限制
         if (isChaos) {
@@ -123,9 +137,9 @@ export const Experience = ({
           const newPolar = Math.max(Math.PI / 4, Math.min(Math.PI / 1.8, currentPolar + palmMove.y));
           controlsRef.current.setPolarAngle(newPolar);
         }
-      } else {
-        // 没有手掌控制时使用自动旋转
-        controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
+      } else if (selectedPhotoIndex === null) {
+        // 没有手掌控制且没有选中照片时使用自动旋转
+        controlsRef.current.setAzimuthalAngle(currentAzimuth + rotationSpeed);
       }
       
       // 大拇指缩放控制
@@ -151,15 +165,15 @@ export const Experience = ({
       <OrbitControls
         ref={controlsRef}
         enablePan={false}
-        enableZoom={!isPhotoSelected}
-        enableRotate={!isPhotoSelected}
+        enableZoom={true}
+        enableRotate={true}
         enableDamping={true}
         dampingFactor={0.1}
         rotateSpeed={0.8}
         zoomSpeed={0.8}
         minDistance={25}
         maxDistance={100}
-        autoRotate={!isPhotoSelected && rotationSpeed === 0 && sceneState === 'FORMED'}
+        autoRotate={selectedPhotoIndex === null && rotationSpeed === 0 && sceneState === 'FORMED'}
         autoRotateSpeed={0.3}
         minPolarAngle={sceneState === 'CHAOS' ? 0 : Math.PI / 4}
         maxPolarAngle={sceneState === 'CHAOS' ? Math.PI : Math.PI / 1.8}
