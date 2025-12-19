@@ -398,17 +398,31 @@ export default function SharePage({ shareId }: SharePageProps) {
     return preset?.url || CHRISTMAS_MUSIC_URL;
   }, [sceneConfig.music]);
 
-  // 初始化音频 - 教程显示时不自动播放
+  // 初始化音频 - 等待配置加载完成后再初始化
   useEffect(() => {
+    // 等待分享数据加载完成
+    if (loading || !shareData) return;
+    
     const musicUrl = getMusicUrl();
     const volume = sceneConfig.music?.volume ?? 0.5;
+    
+    // 如果已有音频实例，更新它
+    if (audioRef.current) {
+      const currentSrc = audioRef.current.src;
+      // 检查是否需要更换音乐源
+      if (!currentSrc.includes(musicUrl.split('/').pop() || '')) {
+        audioRef.current.src = musicUrl;
+      }
+      audioRef.current.volume = volume;
+      return;
+    }
     
     audioRef.current = new Audio(musicUrl);
     audioRef.current.loop = true;
     audioRef.current.volume = volume;
 
-    // 教程显示时不播放音乐
-    if (!showTutorial) {
+    // 教程或音乐提示显示时不播放音乐
+    if (!showTutorial && !showSoundPrompt) {
       const playAudio = () => {
         audioRef.current?.play().catch(() => setMusicPlaying(false));
       };
@@ -416,8 +430,8 @@ export default function SharePage({ shareId }: SharePageProps) {
     }
 
     const handleInteraction = () => {
-      // 教程显示时不自动播放
-      if (showTutorial) return;
+      // 教程或音乐提示显示时不自动播放
+      if (showTutorial || showSoundPrompt) return;
       if (audioRef.current && audioRef.current.paused) {
         audioRef.current.play().then(() => setMusicPlaying(true)).catch(() => {});
       }
@@ -428,14 +442,20 @@ export default function SharePage({ shareId }: SharePageProps) {
     document.addEventListener('touchstart', handleInteraction);
 
     return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
       document.removeEventListener('click', handleInteraction);
       document.removeEventListener('touchstart', handleInteraction);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, shareData, sceneConfig.music?.selected, sceneConfig.music?.volume]);
+  
+  // 组件卸载时清理音频
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
   }, []);
 
   // 教程关闭后开始播放音乐
@@ -466,13 +486,13 @@ export default function SharePage({ shareId }: SharePageProps) {
     const isPlaying = timeline.state.isPlaying;
     
     if (isPlaying && timelineMusic) {
-      // 保存当前音乐，开始播放时间轴音乐
+      // 保存当前音乐ID，开始播放时间轴音乐
       if (previousMusicRef.current === null) {
-        previousMusicRef.current = 'default';
+        previousMusicRef.current = sceneConfig.music?.selected || 'default';
       }
       
       const preset = PRESET_MUSIC.find(m => m.id === timelineMusic);
-      if (preset && audioRef.current.src !== preset.url) {
+      if (preset && !audioRef.current.src.includes(preset.url.split('/').pop() || '')) {
         const wasPlaying = !audioRef.current.paused;
         audioRef.current.src = preset.url;
         audioRef.current.currentTime = 0;
@@ -481,16 +501,17 @@ export default function SharePage({ shareId }: SharePageProps) {
         }
       }
     } else if (!isPlaying && previousMusicRef.current !== null) {
-      // 停止时恢复原来的音乐
+      // 停止时恢复原来配置的音乐
       const wasPlaying = !audioRef.current.paused;
-      audioRef.current.src = CHRISTMAS_MUSIC_URL;
+      const originalMusicUrl = getMusicUrl(); // 使用配置的音乐
+      audioRef.current.src = originalMusicUrl;
       audioRef.current.currentTime = 0;
       if (wasPlaying) {
         audioRef.current.play().catch(() => {});
       }
       previousMusicRef.current = null;
     }
-  }, [timeline.state.isPlaying, sceneConfig.timeline?.music]);
+  }, [timeline.state.isPlaying, sceneConfig.timeline?.music, sceneConfig.music?.selected, getMusicUrl]);
 
   // 加载中
   if (loading) {

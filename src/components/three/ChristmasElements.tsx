@@ -2,7 +2,7 @@ import { useRef, useMemo, useEffect } from 'react';
 import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { CONFIG } from '../../config';
-import type { SceneState, AnimationEasing, ScatterShape, GatherShape, DecorationColors, DecorationTypes } from '../../types';
+import type { SceneState, AnimationEasing, ScatterShape, GatherShape, DecorationColors, DecorationTypes, DecorationTwinkle } from '../../types';
 
 // 缓动函数
 const easingFunctions: Record<AnimationEasing, (t: number) => number> = {
@@ -150,6 +150,7 @@ interface ChristmasElementsProps {
   };
   customColors?: DecorationColors;
   decorationTypes?: DecorationTypes;
+  twinkle?: DecorationTwinkle;
   count?: number;
   easing?: AnimationEasing;
   speed?: number;
@@ -166,6 +167,7 @@ export const ChristmasElements = ({
   customImages,
   customColors,
   decorationTypes,
+  twinkle,
   count = CONFIG.counts.elements,
   easing = 'easeInOut', 
   speed = 1,
@@ -174,6 +176,9 @@ export const ChristmasElements = ({
   treeHeight,
   treeRadius
 }: ChristmasElementsProps) => {
+  // 闪烁配置：默认启用，速度1
+  const twinkleEnabled = twinkle?.enabled ?? true;
+  const twinkleSpeed = twinkle?.speed ?? 1;
   const actualHeight = treeHeight ?? CONFIG.tree.height;
   const actualRadius = treeRadius ?? CONFIG.tree.radius;
   
@@ -263,7 +268,7 @@ export const ChristmasElements = ({
       let color;
       let scale = 1;
       if (type === 0) {
-        // 礼物盒使用自定义颜色
+        // 方块使用自定义颜色
         color = decorationColors[Math.floor(r2 * decorationColors.length)];
         scale = 0.8 + r3 * 0.4;
       } else if (type === 1) {
@@ -391,17 +396,22 @@ export const ChristmasElements = ({
       child.position.lerpVectors(animatedChaosPos, objData.targetPos, elementT);
       
       // 计算闪烁：飞机灯效果 - 大部分时间暗，突然闪一下
-      // 使用 fmod 计算当前在闪烁周期中的位置
-      const cycleTime = (time + objData.twinklePhase) % objData.twinkleInterval;
-      // 闪烁持续时间很短（0.08秒），其余时间暗
-      const flashDuration = 0.08;
-      const isFlashing = cycleTime < flashDuration;
-      // 闪烁时快速亮起然后衰减
-      const flashProgress = isFlashing ? cycleTime / flashDuration : 0;
-      // 使用指数衰减让闪烁更锐利：快速亮起，快速暗下
-      const flashIntensity = isFlashing 
-        ? Math.pow(1 - flashProgress, 0.5) * objData.twinkleIntensity 
-        : 0;
+      let flashIntensity = 0;
+      if (twinkleEnabled) {
+        // 根据速度调整闪烁间隔：速度越快，间隔越短
+        const adjustedInterval = objData.twinkleInterval / twinkleSpeed;
+        // 使用 fmod 计算当前在闪烁周期中的位置
+        const cycleTime = (time + objData.twinklePhase) % adjustedInterval;
+        // 闪烁持续时间很短（0.08秒），其余时间暗
+        const flashDuration = 0.08;
+        const isFlashing = cycleTime < flashDuration;
+        // 闪烁时快速亮起然后衰减
+        const flashProgress = isFlashing ? cycleTime / flashDuration : 0;
+        // 使用指数衰减让闪烁更锐利：快速亮起，快速暗下
+        flashIntensity = isFlashing 
+          ? Math.pow(1 - flashProgress, 0.5) * objData.twinkleIntensity 
+          : 0;
+      }
       
       // 如果是精灵（图片），让它面向相机并更新闪烁
       if (child instanceof THREE.Sprite) {

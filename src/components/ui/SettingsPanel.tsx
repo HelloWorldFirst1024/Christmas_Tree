@@ -804,7 +804,7 @@ export const SettingsPanel = ({
               })} 
               style={{ accentColor: '#FFD700' }} 
             />
-            🎁 礼物盒
+            📦 方块
           </label>
           <label style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px', color: '#ccc' }}>
             <input 
@@ -845,6 +845,57 @@ export const SettingsPanel = ({
             🍬 糖果棒
           </label>
         </div>
+        
+        {/* 闪烁效果配置 */}
+        <p style={{ fontSize: '10px', color: '#888', margin: '8px 0 6px 0' }}>
+          闪烁效果（飞机灯风格）
+        </p>
+        <div style={labelStyle}>
+          <span>启用闪烁</span>
+          <input 
+            type="checkbox" 
+            checked={config.elements.twinkle?.enabled ?? true} 
+            onChange={e => onChange({ 
+              ...config, 
+              elements: { 
+                ...config.elements, 
+                twinkle: { 
+                  enabled: e.target.checked, 
+                  speed: config.elements.twinkle?.speed ?? 1 
+                } 
+              } 
+            })} 
+            style={{ accentColor: '#FFD700' }} 
+          />
+        </div>
+        {(config.elements.twinkle?.enabled ?? true) && (
+          <>
+            <div style={{ ...labelStyle, marginTop: '6px' }}>
+              <span>闪烁频率: {(config.elements.twinkle?.speed ?? 1).toFixed(1)}x</span>
+            </div>
+            <input
+              type="range"
+              min="0.5"
+              max="3"
+              step="0.1"
+              value={config.elements.twinkle?.speed ?? 1}
+              onChange={e => onChange({ 
+                ...config, 
+                elements: { 
+                  ...config.elements, 
+                  twinkle: { 
+                    enabled: config.elements.twinkle?.enabled ?? true, 
+                    speed: Number(e.target.value) 
+                  } 
+                } 
+              })}
+              style={sliderStyle}
+            />
+            <p style={{ fontSize: '9px', color: '#666', margin: '2px 0 0 0' }}>
+              0.5x 慢闪 | 1x 正常 | 3x 快闪
+            </p>
+          </>
+        )}
         
         {/* 自定义装饰图片 */}
         <p style={{ fontSize: '10px', color: '#888', margin: '8px 0 6px 0' }}>

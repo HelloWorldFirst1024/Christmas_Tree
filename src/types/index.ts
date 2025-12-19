@@ -99,9 +99,15 @@ export interface DecorationColors {
 
 // 装饰类型开关配置
 export interface DecorationTypes {
-  box: boolean;       // 方块装饰（礼物盒）
+  box: boolean;       // 方块装饰
   sphere: boolean;    // 球体装饰
   cylinder: boolean;  // 圆柱装饰（糖果棒）
+}
+
+// 装饰闪烁配置
+export interface DecorationTwinkle {
+  enabled: boolean;   // 是否启用闪烁
+  speed: number;      // 闪烁频率 0.5-3（1为默认，数值越大闪烁越快）
 }
 
 // 彩灯颜色配置
@@ -151,6 +157,7 @@ export interface SceneConfig {
     enabled: boolean; 
     count: number;
     types?: DecorationTypes;  // 装饰类型开关（默认全开）
+    twinkle?: DecorationTwinkle;  // 闪烁配置
     customImages?: {
       box?: string;      // 替换方块的 PNG 图片 (base64)
       sphere?: string;   // 替换球体的 PNG 图片 (base64)
