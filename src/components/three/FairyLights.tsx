@@ -75,40 +75,41 @@ const generateScatterPosition = (shape: ScatterShape, index: number): THREE.Vect
       return new THREE.Vector3(radius * Math.cos(angle), y, radius * Math.sin(angle));
     }
     case 'sphere':
-    default:
+    default: {
+      // 均匀球形分布
+      const theta = r1 * Math.PI * 2;
+      const phi = Math.acos(2 * r2 - 1);
+      const r = Math.cbrt(r3) * 30;
       return new THREE.Vector3(
-        (r1 - 0.5) * 60,
-        (r2 - 0.5) * 60,
-        (r3 - 0.5) * 60
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.sin(theta)
       );
+    }
   }
 };
 
-// 生成目标位置
-const generateTargetPosition = (index: number): THREE.Vector3 => {
+// 生成目标位置（支持自定义尺寸）
+const generateTargetPosition = (index: number, h: number, rBase: number): THREE.Vector3 => {
   const r1 = seededRandom(index * 5 + 100);
   const r2 = seededRandom(index * 5 + 101);
-  const h = CONFIG.tree.height;
   const y = (r1 * h) - (h / 2);
-  const rBase = CONFIG.tree.radius;
   const currentRadius = (rBase * (1 - (y + (h / 2)) / h)) + 0.3;
   const theta = r2 * Math.PI * 2;
   return new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
 };
 
-// 根据聚合形状计算延迟（0-1范围，值越大越晚开始动画）
-const calculateGatherDelay = (targetPos: THREE.Vector3, shape: GatherShape): number => {
-  const normalizedY = (targetPos.y + CONFIG.tree.height / 2) / CONFIG.tree.height; // 0=底部, 1=顶部
-  const normalizedX = (targetPos.x + CONFIG.tree.radius) / (2 * CONFIG.tree.radius);
-  const dist = Math.sqrt(targetPos.x * targetPos.x + targetPos.z * targetPos.z) / CONFIG.tree.radius;
+// 根据聚合形状计算延迟（支持自定义尺寸）
+const calculateGatherDelay = (targetPos: THREE.Vector3, shape: GatherShape, h: number, rBase: number): number => {
+  const normalizedY = (targetPos.y + h / 2) / h;
+  const normalizedX = (targetPos.x + rBase) / (2 * rBase);
+  const dist = Math.sqrt(targetPos.x * targetPos.x + targetPos.z * targetPos.z) / rBase;
   const angle = Math.atan2(targetPos.z, targetPos.x);
   
   switch (shape) {
     case 'stack': 
-      // 搭积木：底部先到位，顶部最后
       return normalizedY * 0.85;
     case 'spiralIn': {
-      // 螺旋聚合：像盘山公路一样排队进入
       const spiralTurns = 5;
       const normalizedAngle = (angle + Math.PI) / (2 * Math.PI);
       const currentTurn = normalizedY * spiralTurns;
@@ -116,13 +117,10 @@ const calculateGatherDelay = (targetPos: THREE.Vector3, shape: GatherShape): num
       return Math.min(0.9, positionOnSpiral * 0.95);
     }
     case 'implode': 
-      // 向心收缩
       return (1 - Math.min(1, dist)) * 0.8;
     case 'waterfall': 
-      // 瀑布
       return (1 - normalizedY) * 0.85;
     case 'wave': 
-      // 波浪
       return normalizedX * 0.85;
     case 'direct':
     default: 
@@ -153,10 +151,8 @@ export const FairyLights = ({
   treeHeight,
   treeRadius
 }: FairyLightsProps) => {
-  // TODO: 后续重构内部函数以使用这些动态值
-  const _actualHeight = treeHeight ?? CONFIG.tree.height;
-  const _actualRadius = treeRadius ?? CONFIG.tree.radius;
-  void _actualHeight; void _actualRadius; // 暂时忽略未使用警告
+  const actualHeight = treeHeight ?? CONFIG.tree.height;
+  const actualRadius = treeRadius ?? CONFIG.tree.radius;
   // 合并自定义颜色
   const lightColors = useMemo(() => {
     const colors = { ...DEFAULT_LIGHT_COLORS, ...customColors };
@@ -175,16 +171,16 @@ export const FairyLights = ({
   // 基础数据（不依赖 scatterShape）
   const data = useMemo(() => {
     return new Array(count).fill(0).map((_, i) => {
-      const targetPos = generateTargetPosition(i);
+      const targetPos = generateTargetPosition(i, actualHeight, actualRadius);
       const r1 = seededRandom(i * 4 + 200);
       const r2 = seededRandom(i * 4 + 201);
       const r3 = seededRandom(i * 4 + 202);
       const color = lightColors[Math.floor(r1 * lightColors.length)];
       const blinkSpeed = 2 + r2 * 3;
-      const gatherDelay = calculateGatherDelay(targetPos, gatherShape);
+      const gatherDelay = calculateGatherDelay(targetPos, gatherShape, actualHeight, actualRadius);
       return { targetPos, color, blinkSpeed, gatherDelay, timeOffset: r3 * 100 };
     });
-  }, [count, gatherShape, lightColors]);
+  }, [count, gatherShape, lightColors, actualHeight, actualRadius]);
 
   // 初始化 chaos 位置
   useEffect(() => {

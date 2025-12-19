@@ -175,27 +175,53 @@ export const SettingsPanel = ({
     music: config.music || defaultMusic
   };
 
+  // 检测是否为平板（宽度 >= 768px 且 <= 1024px）
+  const isTablet = typeof window !== 'undefined' && window.innerWidth >= 768 && window.innerWidth <= 1024;
+  // 移动端使用全屏模式，平板和桌面使用侧边栏模式
+  const useFullScreen = mobile && !isTablet;
+
   // 微信/鸿蒙/iOS/Android 浏览器兼容样式
-  const panelStyle: React.CSSProperties = {
+  const panelStyle: React.CSSProperties = useFullScreen ? {
+    // 移动端：全屏覆盖模式
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 200,
+    background: 'rgba(0,0,0,0.98)',
+    padding: '16px',
+    paddingTop: 'max(16px, env(safe-area-inset-top, 16px))',
+    paddingBottom: 'max(16px, env(safe-area-inset-bottom, 16px))',
+    overflowY: 'auto',
+    overflowX: 'hidden',
+    fontFamily: 'sans-serif',
+    color: '#fff',
+    boxSizing: 'border-box',
+    WebkitOverflowScrolling: 'touch',
+    wordBreak: 'break-word',
+    overflowWrap: 'break-word'
+  } : {
+    // 平板/桌面：侧边栏模式
     position: 'absolute',
-    top: mobile ? 'max(10px, env(safe-area-inset-top, 10px))' : '60px',
-    left: mobile ? 'max(10px, env(safe-area-inset-left, 10px))' : '20px',
-    right: mobile ? 'max(10px, env(safe-area-inset-right, 10px))' : 'auto',
+    top: isTablet ? '10px' : '60px',
+    left: isTablet ? '10px' : '20px',
+    right: 'auto',
     zIndex: 20,
     background: 'rgba(0,0,0,0.95)',
     border: '1px solid rgba(255,215,0,0.3)',
     borderRadius: '8px',
-    padding: mobile ? '12px' : '16px',
-    width: mobile ? 'auto' : '280px',
-    maxWidth: mobile ? 'calc(100vw - 20px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))' : '280px',
-    maxHeight: mobile ? '70vh' : '80vh',
+    padding: '16px',
+    width: isTablet ? '320px' : '280px',
+    maxWidth: '90vw',
+    maxHeight: isTablet ? '85vh' : '80vh',
     overflowY: 'auto',
     overflowX: 'hidden',
     fontFamily: 'sans-serif',
     color: '#fff',
     backdropFilter: 'blur(8px)',
     boxSizing: 'border-box',
-    WebkitOverflowScrolling: 'touch', // iOS 滚动优化
+    WebkitOverflowScrolling: 'touch',
     wordBreak: 'break-word',
     overflowWrap: 'break-word'
   };
@@ -231,9 +257,33 @@ export const SettingsPanel = ({
 
   return (
     <div style={panelStyle}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: '16px',
+        paddingBottom: useFullScreen ? '12px' : '0',
+        borderBottom: useFullScreen ? '1px solid rgba(255,215,0,0.2)' : 'none'
+      }}>
         <span style={{ fontSize: '16px', fontWeight: 'bold', color: '#FFD700', display: 'flex', alignItems: 'center', gap: '6px' }}><Settings size={18} /> 场景设置</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#888', cursor: 'pointer', display: 'flex', alignItems: 'center' }}><X size={18} /></button>
+        <button 
+          onClick={onClose} 
+          style={{ 
+            background: useFullScreen ? 'rgba(255,215,0,0.2)' : 'none', 
+            border: useFullScreen ? '1px solid rgba(255,215,0,0.3)' : 'none', 
+            color: useFullScreen ? '#FFD700' : '#888', 
+            cursor: 'pointer', 
+            display: 'flex', 
+            alignItems: 'center',
+            padding: useFullScreen ? '8px 16px' : '4px',
+            borderRadius: '6px',
+            gap: '4px',
+            fontSize: '14px'
+          }}
+        >
+          <X size={18} />
+          {useFullScreen && '关闭'}
+        </button>
       </div>
 
       {/* 标题文字 */}

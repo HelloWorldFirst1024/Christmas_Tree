@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Experience, GestureController, TitleOverlay, WelcomeTutorial, IntroOverlay, CenterPhoto, CSSTextEffect, photoScreenPositions } from '../components';
 import { CHRISTMAS_MUSIC_URL } from '../config';
-import { isMobile } from '../utils/helpers';
+import { isMobile, isTablet } from '../utils/helpers';
 import { sanitizeShareConfig, sanitizePhotos, sanitizeText } from '../utils/sanitize';
 import { getShare } from '../lib/r2';
 import type { ShareData } from '../lib/r2';
@@ -550,11 +550,13 @@ export default function SharePage({ shareId }: SharePageProps) {
       {/* 3D Canvas - 教程显示时暂停渲染 */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
-          dpr={mobile ? 1 : [1, 2]}
+          dpr={mobile ? 1 : isTablet() ? 1.5 : [1, 2]}
           gl={{
             toneMapping: THREE.ReinhardToneMapping,
             antialias: !mobile,
-            powerPreference: mobile ? 'low-power' : 'high-performance'
+            powerPreference: mobile ? 'low-power' : 'high-performance',
+            logarithmicDepthBuffer: true,
+            precision: 'highp'
           }}
           shadows={false}
           frameloop={showTutorial ? 'never' : 'always'}

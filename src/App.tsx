@@ -3,7 +3,7 @@ import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
 import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, CSSTextEffect, photoScreenPositions } from './components';
 import { CHRISTMAS_MUSIC_URL } from './config';
-import { isMobile, fileToBase64 } from './utils/helpers';
+import { isMobile, isTablet, fileToBase64 } from './utils/helpers';
 import { useTimeline } from './hooks/useTimeline';
 import { 
   uploadShare, getLocalShare, getShareUrl, updateShare, getShare,
@@ -767,11 +767,13 @@ export default function GrandTreeApp() {
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
           key={refreshKey}
-          dpr={mobile ? 1 : [1, 2]}
+          dpr={mobile ? 1 : isTablet() ? 1.5 : [1, 2]}
           gl={{
             toneMapping: THREE.ReinhardToneMapping,
             antialias: !mobile,
-            powerPreference: mobile ? 'low-power' : 'high-performance'
+            powerPreference: mobile ? 'low-power' : 'high-performance',
+            logarithmicDepthBuffer: true,  // 解决 Z-fighting 问题
+            precision: 'highp'
           }}
           shadows={false}
           frameloop="always"

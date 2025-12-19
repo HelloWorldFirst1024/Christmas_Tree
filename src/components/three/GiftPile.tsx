@@ -67,32 +67,38 @@ const generateScatterPosition = (shape: ScatterShape, index: number): THREE.Vect
       return new THREE.Vector3(radius * Math.cos(angle), y, radius * Math.sin(angle));
     }
     case 'sphere':
-    default:
+    default: {
+      // 均匀球形分布
+      const theta = r1 * Math.PI * 2;
+      const phi = Math.acos(2 * r2 - 1);
+      const r = Math.cbrt(r3) * 25;
       return new THREE.Vector3(
-        (r1 - 0.5) * 50,
-        (r2 - 0.5) * 50,
-        (r3 - 0.5) * 50
+        r * Math.sin(phi) * Math.cos(theta),
+        r * Math.cos(phi),
+        r * Math.sin(phi) * Math.sin(theta)
       );
+    }
   }
 };
 
-// 生成目标位置
-const generateTargetPosition = (index: number): THREE.Vector3 => {
+// 生成目标位置（支持自定义尺寸）
+const generateTargetPosition = (index: number, h: number, rBase: number): THREE.Vector3 => {
   const r1 = seededRandom(index * 4 + 100);
   const r2 = seededRandom(index * 4 + 101);
   const r3 = seededRandom(index * 4 + 102);
   const angle = r1 * Math.PI * 2;
-  const radius = 2 + r2 * 6;
+  // 礼物堆的半径根据树的半径调整
+  const radius = (rBase * 0.3) + r2 * (rBase * 0.6);
   const x = Math.cos(angle) * radius;
   const z = Math.sin(angle) * radius;
-  const y = -CONFIG.tree.height / 2 - 1 + r3 * 1.5;
+  const y = -h / 2 - 1 + r3 * 1.5;
   return new THREE.Vector3(x, y, z);
 };
 
-// 根据聚合形状计算延迟（礼物堆在底部，使用简化版）
-const calculateGatherDelay = (pos: THREE.Vector3, shape: GatherShape): number => {
-  const normalizedX = (pos.x + 10) / 20;
-  const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z) / 10;
+// 根据聚合形状计算延迟（礼物堆在底部，使用简化版，支持自定义尺寸）
+const calculateGatherDelay = (pos: THREE.Vector3, shape: GatherShape, rBase: number): number => {
+  const normalizedX = (pos.x + rBase) / (2 * rBase);
+  const dist = Math.sqrt(pos.x * pos.x + pos.z * pos.z) / rBase;
   const angle = Math.atan2(pos.z, pos.x);
   
   switch (shape) {
@@ -142,10 +148,8 @@ export const GiftPile = ({
   treeHeight,
   treeRadius
 }: GiftPileProps) => {
-  // TODO: 后续重构内部函数以使用这些动态值
-  const _actualHeight = treeHeight ?? CONFIG.tree.height;
-  const _actualRadius = treeRadius ?? CONFIG.tree.radius;
-  void _actualHeight; void _actualRadius; // 暂时忽略未使用警告
+  const actualHeight = treeHeight ?? CONFIG.tree.height;
+  const actualRadius = treeRadius ?? CONFIG.tree.radius;
   const giftColors = colors && colors.length > 0 ? colors : DEFAULT_GIFT_COLORS;
   const groupRef = useRef<THREE.Group>(null);
   const progressRef = useRef(0);
@@ -166,7 +170,7 @@ export const GiftPile = ({
     }[] = [];
 
     for (let i = 0; i < count; i++) {
-      const pos = generateTargetPosition(i);
+      const pos = generateTargetPosition(i, actualHeight, actualRadius);
       const r1 = seededRandom(i * 3 + 200);
       const r2 = seededRandom(i * 3 + 201);
       const r3 = seededRandom(i * 3 + 202);
@@ -176,11 +180,11 @@ export const GiftPile = ({
         scale: 0.8 + r1 * 1.2,
         color: giftColors[Math.floor(r2 * giftColors.length)],
         rotation: new THREE.Euler(0, r3 * Math.PI, 0),
-        gatherDelay: calculateGatherDelay(pos, gatherShape)
+        gatherDelay: calculateGatherDelay(pos, gatherShape, actualRadius)
       });
     }
     return items;
-  }, [count, gatherShape, giftColors]);
+  }, [count, gatherShape, giftColors, actualHeight, actualRadius]);
 
   // 初始化 chaos 位置
   useEffect(() => {

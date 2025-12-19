@@ -63,6 +63,7 @@ export const Experience = ({
   const controlsRef = useRef<any>(null);
   const isPhotoSelected = selectedPhotoIndex !== null;
   const mobile = isMobile();
+  const prevSceneStateRef = useRef<SceneState>(sceneState);
 
   // 确保 config 有新字段的默认值
   const safeConfig = {
@@ -80,16 +81,48 @@ export const Experience = ({
     fog: config.fog || { enabled: true, opacity: 0.3 }
   };
 
-  useFrame((state) => {
+  useFrame((state, delta) => {
     if (controlsRef.current && !isPhotoSelected) {
+      const isFormed = sceneState === 'FORMED';
+      const isChaos = sceneState === 'CHAOS';
+      
+      // 状态切换时的视角处理
+      if (prevSceneStateRef.current !== sceneState) {
+        if (isFormed) {
+          // 聚合时：平滑过渡到正对圣诞树的视角
+          controlsRef.current.minPolarAngle = Math.PI / 4;
+          controlsRef.current.maxPolarAngle = Math.PI / 1.8;
+        } else {
+          // 散开时：取消视角限制，可以自由旋转
+          controlsRef.current.minPolarAngle = 0;
+          controlsRef.current.maxPolarAngle = Math.PI;
+        }
+        prevSceneStateRef.current = sceneState;
+      }
+      
+      // 聚合时平滑过渡到正对视角
+      if (isFormed && !palmMove) {
+        const targetPolar = Math.PI / 2.2; // 稍微俯视的角度
+        const currentPolar = controlsRef.current.getPolarAngle();
+        const polarDiff = targetPolar - currentPolar;
+        if (Math.abs(polarDiff) > 0.01) {
+          controlsRef.current.setPolarAngle(currentPolar + polarDiff * delta * 2);
+        }
+      }
+      
       // 手掌滑动控制视角
       if (palmMove && (Math.abs(palmMove.x) > 0.001 || Math.abs(palmMove.y) > 0.001)) {
         const currentAzimuth = controlsRef.current.getAzimuthalAngle();
         const currentPolar = controlsRef.current.getPolarAngle();
         controlsRef.current.setAzimuthalAngle(currentAzimuth + palmMove.x);
-        // 限制极角范围
-        const newPolar = Math.max(Math.PI / 4, Math.min(Math.PI / 1.8, currentPolar + palmMove.y));
-        controlsRef.current.setPolarAngle(newPolar);
+        // 散开时不限制极角，聚合时限制
+        if (isChaos) {
+          const newPolar = Math.max(0.1, Math.min(Math.PI - 0.1, currentPolar + palmMove.y));
+          controlsRef.current.setPolarAngle(newPolar);
+        } else {
+          const newPolar = Math.max(Math.PI / 4, Math.min(Math.PI / 1.8, currentPolar + palmMove.y));
+          controlsRef.current.setPolarAngle(newPolar);
+        }
       } else {
         // 没有手掌控制时使用自动旋转
         controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
@@ -128,8 +161,8 @@ export const Experience = ({
         maxDistance={100}
         autoRotate={!isPhotoSelected && rotationSpeed === 0 && sceneState === 'FORMED'}
         autoRotateSpeed={0.3}
-        minPolarAngle={Math.PI / 4}
-        maxPolarAngle={Math.PI / 1.8}
+        minPolarAngle={sceneState === 'CHAOS' ? 0 : Math.PI / 4}
+        maxPolarAngle={sceneState === 'CHAOS' ? Math.PI : Math.PI / 1.8}
         touches={{ ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_PAN }}
       />
 
@@ -248,6 +281,7 @@ export const Experience = ({
             )}
             {config.glowingStreaks?.enabled && (
               <GlowingStreaks
+                state={sceneState}
                 count={config.glowingStreaks.count || 5}
                 color={config.glowingStreaks.color || "#FFD700"}
                 speed={config.glowingStreaks.speed || 1}

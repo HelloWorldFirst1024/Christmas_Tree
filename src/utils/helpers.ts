@@ -1,10 +1,27 @@
 import { CONFIG } from '../config';
 
-// 检测是否为移动端
+// 检测是否为移动端（手机）
 export const isMobile = (): boolean => {
   if (typeof window === 'undefined') return false;
-  return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+  const ua = navigator.userAgent;
+  // iPad 在新版 iOS 上会伪装成 Mac，需要通过触摸点检测
+  const isIPad = /iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  // 平板不算移动端（宽度 >= 768）
+  if (isIPad || /tablet|playbook|silk/i.test(ua)) {
+    return false;
+  }
+  return /Android|webOS|iPhone|iPod|BlackBerry|IEMobile|Opera Mini/i.test(ua) ||
     window.innerWidth < 768;
+};
+
+// 检测是否为平板
+export const isTablet = (): boolean => {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent;
+  const isIPad = /iPad/i.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const isAndroidTablet = /Android/i.test(ua) && !/Mobile/i.test(ua);
+  return isIPad || isAndroidTablet || /tablet|playbook|silk/i.test(ua) ||
+    (window.innerWidth >= 768 && window.innerWidth <= 1024 && 'ontouchstart' in window);
 };
 
 // 生成树形位置（支持可选的种子随机参数和自定义尺寸）

@@ -196,17 +196,20 @@ const generateScatterPositions = (count: number, shape: ScatterShape): Float32Ar
     }
     case 'sphere':
     default: {
-      // 使用种子随机生成球形分布
+      // 使用种子随机生成球形分布（均匀球面分布）
       for (let i = 0; i < count; i++) {
         const r1 = seededRandom(i * 3 + 1);
         const r2 = seededRandom(i * 3 + 2);
         const r3 = seededRandom(i * 3 + 3);
+        // 球面坐标：theta 是水平角度，phi 是垂直角度
         const theta = r1 * Math.PI * 2;
-        const phi = Math.acos(2 * r2 - 1);
-        const r = r3 * 25;
-        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-        positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-        positions[i * 3 + 2] = r * Math.cos(phi);
+        const phi = Math.acos(2 * r2 - 1); // 均匀分布在球面上
+        // 使用立方根使粒子在球体内部均匀分布
+        const r = Math.cbrt(r3) * 25;
+        // 标准球面坐标转换
+        positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);     // X
+        positions[i * 3 + 1] = r * Math.cos(phi);                    // Y (上下)
+        positions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta); // Z
       }
       break;
     }
