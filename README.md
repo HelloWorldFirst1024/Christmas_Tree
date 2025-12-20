@@ -4,6 +4,15 @@
 
 ![Project Preview](public/preview.png)
 
+## 🔗 链接
+
+- **仓库地址**: [https://github.com/FronNian/Christmas-Tree-Ultra](https://github.com/FronNian/Christmas-Tree-Ultra)
+- **在线体验**: [https://tree.lynflows.com/](https://tree.lynflows.com/)
+
+> ⚠️ **注意**: 
+> - 在线体验地址将于 2025 年 12 月底停止维护，届时请自行部署使用
+> - 分享的数据仅保存 7 天，过期后需重新创建
+
 ## ✨ 特性
 
 - **45,000+ 发光粒子** 组成的梦幻树身，配合动态 Bloom 光晕效果
