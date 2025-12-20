@@ -57,12 +57,16 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   onChange,
   photoCount,
   configuredTexts = [],
-  textSwitchInterval = 3,
+  textSwitchInterval: _textSwitchInterval = 3,
   onTextsChange,
-  onTextIntervalChange,
+  onTextIntervalChange: _onTextIntervalChange,
   onPreview,
   isPlaying = false
 }) => {
+  // 标记未使用的变量（保留接口兼容性）
+  void _textSwitchInterval;
+  void _onTextIntervalChange;
+  
   const [expandedStep, setExpandedStep] = useState<string | null>(null);
 
   // 初始化默认配置

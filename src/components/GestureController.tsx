@@ -149,7 +149,7 @@ interface GestureControllerProps {
   enabled: boolean;
   onPinch?: (pos: { x: number; y: number }) => void;
   onPalmMove?: (deltaX: number, deltaY: number) => void;
-  onZoom?: (delta: number) => void;
+  onPalmVertical?: (y: number) => void; // 手掌垂直位置 (0-1, 0=顶部, 1=底部)
   isPhotoSelected: boolean;
 }
 
@@ -161,7 +161,7 @@ export const GestureController = ({
   enabled,
   onPinch,
   onPalmMove,
-  onZoom,
+  onPalmVertical,
   isPhotoSelected
 }: GestureControllerProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -173,8 +173,8 @@ export const GestureController = ({
   const gestureHoldCountRef = useRef(0);
   const pinchCooldownRef = useRef(0);
 
-  const callbacksRef = useRef({ onGesture, onMove, onStatus, debugMode, onPinch, onPalmMove, onZoom, isPhotoSelected });
-  callbacksRef.current = { onGesture, onMove, onStatus, debugMode, onPinch, onPalmMove, onZoom, isPhotoSelected };
+  const callbacksRef = useRef({ onGesture, onMove, onStatus, debugMode, onPinch, onPalmMove, onPalmVertical, isPhotoSelected });
+  callbacksRef.current = { onGesture, onMove, onStatus, debugMode, onPinch, onPalmMove, onPalmVertical, isPhotoSelected };
 
   useEffect(() => {
     if (!enabled) {
@@ -365,9 +365,17 @@ export const GestureController = ({
             });
           }
           
-          // 张开手掌 + 移动 = 控制视角
-          if (gesture === 'Open_Palm' && callbacksRef.current.onPalmMove) {
-            if (lastPalmPosRef.current) {
+          // 张开手掌 + 移动 = 控制视角和旋转速度
+          if (gesture === 'Open_Palm') {
+            // 传递手掌垂直位置（用于控制旋转速度）
+            if (callbacksRef.current.onPalmVertical) {
+              // palmCenter.y 范围约 0.2-0.8，映射到 0-1
+              const normalizedY = Math.max(0, Math.min(1, (palmCenter.y - 0.2) / 0.6));
+              callbacksRef.current.onPalmVertical(normalizedY);
+            }
+            
+            // 控制视角移动
+            if (callbacksRef.current.onPalmMove && lastPalmPosRef.current) {
               const deltaX = (lastPalmPosRef.current.x - palmCenter.x) * 4;
               const deltaY = (palmCenter.y - lastPalmPosRef.current.y) * 3;
               
@@ -378,12 +386,6 @@ export const GestureController = ({
             lastPalmPosRef.current = { ...palmCenter };
           } else {
             lastPalmPosRef.current = null;
-          }
-          
-          // 大拇指向上/向下 = 缩放
-          if ((gesture === 'Thumb_Up' || gesture === 'Thumb_Down') && callbacksRef.current.onZoom) {
-            const zoomDelta = gesture === 'Thumb_Up' ? -0.5 : 0.5;
-            callbacksRef.current.onZoom(zoomDelta);
           }
           
           // 触发手势回调（排除移动相关手势）

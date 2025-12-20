@@ -52,7 +52,6 @@ export default function SharePage({ shareId }: SharePageProps) {
   const [sceneState, setSceneState] = useState<SceneState>('FORMED');
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [palmMove, setPalmMove] = useState<{ x: number; y: number } | undefined>(undefined);
-  const [zoomDelta, setZoomDelta] = useState(0);
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [musicPlaying, setMusicPlaying] = useState(true);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
@@ -299,7 +298,8 @@ export default function SharePage({ shareId }: SharePageProps) {
     }
   }, []); // 空依赖数组，函数引用永远不变
 
-  const stopTextEffect = useCallback(() => {
+  // stopTextEffect 保留用于未来扩展
+  const _stopTextEffect = useCallback(() => {
     if (textEffectTimerRef.current) {
       clearTimeout(textEffectTimerRef.current);
       textEffectTimerRef.current = null;
@@ -312,6 +312,7 @@ export default function SharePage({ shareId }: SharePageProps) {
     setCurrentTextIndex(0);
     if (hideTreeConfigRef.current) setHideTree(false);
   }, []); // 空依赖数组，函数引用永远不变
+  void _stopTextEffect; // 标记为已使用
 
   // 故事线步骤 - 简化版：文字特效只显示第一条，不轮播
   const prevTimelineStepRef = useRef<number>(-1);
@@ -486,12 +487,6 @@ export default function SharePage({ shareId }: SharePageProps) {
   const handlePalmMove = useCallback((deltaX: number, deltaY: number) => {
     setPalmMove({ x: deltaX, y: deltaY });
     setTimeout(() => setPalmMove(undefined), 50);
-  }, []);
-
-  // 处理缩放（大拇指向上/向下）
-  const handleZoom = useCallback((delta: number) => {
-    setZoomDelta(delta);
-    setTimeout(() => setZoomDelta(0), 100);
   }, []);
 
   // 获取当前音乐的歌词 URL
@@ -726,7 +721,6 @@ export default function SharePage({ shareId }: SharePageProps) {
             sceneState={timeline.showTree ? 'FORMED' : sceneState}
             rotationSpeed={rotationSpeed}
             palmMove={palmMove}
-            zoomDelta={zoomDelta}
             config={sceneConfig}
             selectedPhotoIndex={selectedPhotoIndex}
             onPhotoSelect={setSelectedPhotoIndex}
@@ -740,6 +734,7 @@ export default function SharePage({ shareId }: SharePageProps) {
             heartCenterPhoto={timeline.heartPhotoIndex !== null ? shareData.photos[timeline.heartPhotoIndex] : undefined}
             heartCenterPhotos={shareData.photos.length > 0 ? shareData.photos : undefined}
             heartPhotoInterval={(sceneConfig.heartEffect as { photoInterval?: number } | undefined)?.photoInterval || 3000}
+            heartBottomText={(sceneConfig.heartEffect as { bottomText?: string } | undefined)?.bottomText}
           />
         </Canvas>
       </div>
@@ -754,7 +749,6 @@ export default function SharePage({ shareId }: SharePageProps) {
         isPhotoSelected={selectedPhotoIndex !== null}
         onPinch={handlePinch}
         onPalmMove={handlePalmMove}
-        onZoom={handleZoom}
       />
 
       {/* 底部按钮 - 分享模式只显示音乐、帮助和聚合/散开 */}

@@ -40,7 +40,7 @@ interface ExperienceProps {
   heartPhotoInterval?: number; // 照片轮播间隔（毫秒）
   heartBottomText?: string; // 爱心特效底部文字
   palmMove?: { x: number; y: number }; // 手掌滑动控制视角
-  zoomDelta?: number; // 缩放增量（大拇指控制）
+  onHeartPaused?: (paused: boolean) => void; // 爱心特效暂停状态回调
 }
 
 export const Experience = ({
@@ -60,7 +60,7 @@ export const Experience = ({
   heartPhotoInterval = 3000,
   heartBottomText,
   palmMove,
-  zoomDelta = 0
+  onHeartPaused
 }: ExperienceProps) => {
   const controlsRef = useRef<any>(null);
   const mobile = isMobile();
@@ -85,7 +85,7 @@ export const Experience = ({
     fog: config.fog || { enabled: true, opacity: 0.3 }
   };
 
-  useFrame((state, delta) => {
+  useFrame((_, delta) => {
     if (controlsRef.current) {
       const isFormed = sceneState === 'FORMED';
       const isChaos = sceneState === 'CHAOS';
@@ -142,19 +142,6 @@ export const Experience = ({
       } else if (selectedPhotoIndex === null) {
         // 没有手掌控制且没有选中照片时使用自动旋转
         controlsRef.current.setAzimuthalAngle(currentAzimuth + rotationSpeed);
-      }
-      
-      // 大拇指缩放控制
-      if (zoomDelta !== 0) {
-        const camera = state.camera;
-        const direction = new THREE.Vector3();
-        camera.getWorldDirection(direction);
-        // 限制缩放范围
-        const currentDist = camera.position.length();
-        const newDist = currentDist + zoomDelta;
-        if (newDist >= 25 && newDist <= 100) {
-          camera.position.addScaledVector(direction, -zoomDelta);
-        }
       }
       
       controlsRef.current.update();
@@ -351,6 +338,7 @@ export const Experience = ({
         bottomText={heartBottomText || config.heartEffect?.bottomText}
         textColor={config.heartEffect?.bottomTextColor || '#FFD700'}
         textSize={config.heartEffect?.bottomTextSize || 1}
+        onPausedChange={onHeartPaused}
       />
       <TextParticles 
         text={customMessage || 'MERRY CHRISTMAS'} 

@@ -173,7 +173,15 @@ export interface SceneConfig {
   title: { enabled: boolean; text: string; size: number; font?: string; color?: string; shadowColor?: string };
   giftPile: { enabled: boolean; count: number; colors?: string[] };
   ribbons: { enabled: boolean; count: number; colors?: string[] };
-  fog: { enabled: boolean; opacity: number; color?: string };
+  fog: { 
+    enabled: boolean; 
+    opacity: number; 
+    color?: string;
+    count?: number;      // 粒子数量
+    size?: number;       // 粒子大小
+    spread?: number;     // 扩散范围
+    height?: number;     // 高度范围
+  };
   background?: { color: string };
   photoOrnaments?: {       // 照片装饰配置
     enabled?: boolean;     // 是否显示照片装饰

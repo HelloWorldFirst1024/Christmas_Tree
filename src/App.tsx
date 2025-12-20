@@ -60,6 +60,9 @@ export default function GrandTreeApp() {
   const [showText, setShowText] = useState(false);
   const [currentTextIndex, setCurrentTextIndex] = useState(0);
   const [currentGesture, setCurrentGesture] = useState<string>('');
+  
+  // 爱心特效暂停状态（由 HeartParticles 组件控制）
+  const [, setHeartPaused] = useState(false);
 
   // 头像裁剪状态
   const [avatarToCrop, setAvatarToCrop] = useState<string | null>(null);
@@ -392,8 +395,11 @@ export default function GrandTreeApp() {
         // 计算爱心特效持续时间
         const photoInterval = (sceneConfig.heartEffect as { photoInterval?: number } | undefined)?.photoInterval || 3000;
         const photoCount = uploadedPhotos.length || 1;
-        // 粒子聚合时间(约2秒) + 前N-1张照片时间 + 滑动动画时间 + 最后一张照片显示配置的duration
-        const heartDuration = 2000 + (photoCount - 1) * photoInterval + (photoCount - 1) * 600 + effectConfig.duration + 1000;
+        // 多张照片时：环绕5秒 + 收缩0.8秒 + 轮播时间
+        const hasMultiplePhotos = photoCount > 1;
+        const heartDuration = hasMultiplePhotos 
+          ? 5000 + 800 + (photoCount * photoInterval) + effectConfig.duration
+          : effectConfig.duration + 2000;
         
         heartTimeoutRef.current = setTimeout(() => {
           setShowHeart(false);
@@ -448,6 +454,7 @@ export default function GrandTreeApp() {
     if (effect === 'heart' && showHeart) {
       setShowHeart(false);
       setHideTree(false);
+      setHeartPaused(false);
       if (heartTimeoutRef.current) clearTimeout(heartTimeoutRef.current);
       return;
     }
@@ -483,8 +490,15 @@ export default function GrandTreeApp() {
     }
   }, [sceneConfig.gestures, executeGestureAction]);
 
-  // 处理捏合选择照片
-  const handlePinch = useCallback((pos: { x: number; y: number }) => {
+  // 处理捏合 - 爱心特效时暂停/继续，普通模式选择照片
+  const handlePinch = useCallback((_pos: { x: number; y: number }) => {
+    // 爱心特效显示时，捏合暂停/继续
+    if (showHeart) {
+      setHeartPaused(prev => !prev);
+      return;
+    }
+    
+    // 普通模式下的照片选择
     if (selectedPhotoIndex !== null) {
       setSelectedPhotoIndex(null);
     } else {
@@ -493,8 +507,8 @@ export default function GrandTreeApp() {
 
       photoScreenPositions.forEach((photoPos) => {
         if (photoPos) {
-          const dx = photoPos.x - pos.x;
-          const dy = photoPos.y - pos.y;
+          const dx = photoPos.x - _pos.x;
+          const dy = photoPos.y - _pos.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
           if (dist < closestDist) {
             closestDist = dist;
@@ -507,20 +521,13 @@ export default function GrandTreeApp() {
         setSelectedPhotoIndex(closestIndex);
       }
     }
-  }, [selectedPhotoIndex]);
+  }, [selectedPhotoIndex, showHeart]);
 
   // 处理手掌滑动控制视角
   const handlePalmMove = useCallback((deltaX: number, deltaY: number) => {
     setPalmMove({ x: deltaX, y: deltaY });
     // 短暂后清除，让下一帧可以继续接收新的移动
     setTimeout(() => setPalmMove(undefined), 50);
-  }, []);
-
-  // 处理缩放（大拇指向上/向下）
-  const [zoomDelta, setZoomDelta] = useState(0);
-  const handleZoom = useCallback((delta: number) => {
-    setZoomDelta(delta);
-    setTimeout(() => setZoomDelta(0), 100);
   }, []);
 
   // 获取当前音乐 URL
@@ -951,7 +958,6 @@ export default function GrandTreeApp() {
             sceneState={timeline.showTree ? 'FORMED' : sceneState}
             rotationSpeed={rotationSpeed}
             palmMove={palmMove}
-            zoomDelta={zoomDelta}
             config={sceneConfig}
             selectedPhotoIndex={selectedPhotoIndex}
             onPhotoSelect={setSelectedPhotoIndex}
@@ -965,6 +971,7 @@ export default function GrandTreeApp() {
             heartCenterPhoto={timeline.heartPhotoIndex !== null ? uploadedPhotos[timeline.heartPhotoIndex] : undefined}
             heartCenterPhotos={uploadedPhotos.length > 0 ? uploadedPhotos : undefined}
             heartPhotoInterval={(sceneConfig.heartEffect as { photoInterval?: number } | undefined)?.photoInterval || 3000}
+            onHeartPaused={setHeartPaused}
           />
         </Canvas>
       </div>
@@ -979,7 +986,6 @@ export default function GrandTreeApp() {
         isPhotoSelected={selectedPhotoIndex !== null}
         onPinch={handlePinch}
         onPalmMove={handlePalmMove}
-        onZoom={handleZoom}
       />
 
       {/* 设置面板 */}

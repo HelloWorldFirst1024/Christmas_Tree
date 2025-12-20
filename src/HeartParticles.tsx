@@ -29,6 +29,8 @@ interface HeartParticlesProps {
   bottomText?: string;      // 底部显示的文字
   textColor?: string;       // 文字颜色
   textSize?: number;        // 文字大小倍数
+  // 暂停控制回调
+  onPausedChange?: (paused: boolean) => void;
 }
 
 // 生成心形轮廓点（用于边框流动效果）
@@ -349,6 +351,385 @@ const _CenterPhotoPlane = ({ photoUrl, visible, progress }: { photoUrl: string; 
   );
 };
 void _CenterPhotoPlane; // 避免 TS 未使用警告
+
+// 统一照片展示组件 - 自动播放流程：环绕旋转(5秒) → 收缩到中心轮播
+// 支持 Pinch 手势暂停/继续
+type PhotoDisplayPhase = 'orbit' | 'shrinking' | 'carousel';
+
+const UnifiedPhotoDisplay = ({
+  photos,
+  visible,
+  progress,
+  interval = 3000,
+  photoScale = 1,
+  frameColor = '#FFFFFF',
+  isMobileDevice = false,
+  paused = false,
+  onPausedChange
+}: {
+  photos: string[];
+  visible: boolean;
+  progress: number;
+  interval?: number;
+  photoScale?: number;
+  frameColor?: string;
+  isMobileDevice?: boolean;
+  paused?: boolean;
+  onPausedChange?: (paused: boolean) => void;
+}) => {
+  const groupRef = useRef<THREE.Group>(null);
+  const photoRefs = useRef<THREE.Group[]>([]);
+  const rotationRef = useRef(0);
+  const phaseTimeRef = useRef(0);
+  const [phase, setPhase] = useState<PhotoDisplayPhase>('orbit');
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const [slideProgress, setSlideProgress] = useState(0);
+  const [isSliding, setIsSliding] = useState(false);
+  const slideStartRef = useRef(0);
+  const lastCarouselSwitchRef = useRef(0);
+  const shrinkProgressRef = useRef(0);
+  const wasVisibleRef = useRef(false);
+  
+  // 环绕参数
+  const orbitRadius = isMobileDevice ? 8 : 12;
+  const photoSize = isMobileDevice ? 0.7 : 1.0;
+  const orbitDuration = 5000; // 环绕阶段持续5秒
+  const shrinkDuration = 800; // 收缩动画持续时间
+  // 轮播阶段的照片缩放（比环绕时大）
+  const carouselScale = photoScale * (isMobileDevice ? 1.6 : 2.2);
+  
+  // visible 变化时重置状态
+  useEffect(() => {
+    if (visible && !wasVisibleRef.current) {
+      setPhase('orbit');
+      phaseTimeRef.current = 0;
+      rotationRef.current = 0;
+      shrinkProgressRef.current = 0;
+      setCarouselIndex(0);
+      setSlideProgress(0);
+      setIsSliding(false);
+      lastCarouselSwitchRef.current = 0;
+    }
+    wasVisibleRef.current = visible;
+  }, [visible]);
+  
+  useFrame((state, delta) => {
+    if (!groupRef.current || !visible) return;
+    
+    const now = Date.now();
+    
+    // 暂停时不更新时间和动画
+    if (!paused) {
+      phaseTimeRef.current += delta * 1000;
+      
+      // 阶段转换逻辑
+      if (phase === 'orbit' && phaseTimeRef.current >= orbitDuration && progress > 0.8) {
+        setPhase('shrinking');
+        phaseTimeRef.current = 0;
+        shrinkProgressRef.current = 0;
+      } else if (phase === 'shrinking') {
+        shrinkProgressRef.current = Math.min(1, phaseTimeRef.current / shrinkDuration);
+        if (shrinkProgressRef.current >= 1) {
+          setPhase('carousel');
+          phaseTimeRef.current = 0;
+          lastCarouselSwitchRef.current = now;
+        }
+      }
+      
+      // 环绕阶段持续旋转
+      if (phase === 'orbit') {
+        rotationRef.current += delta * 0.5;
+      }
+      
+      // 轮播阶段切换照片
+      if (phase === 'carousel' && photos.length > 1) {
+        if (isSliding) {
+          const elapsed = now - slideStartRef.current;
+          const slideDuration = 600;
+          const newProgress = Math.min(1, elapsed / slideDuration);
+          const eased = 1 - Math.pow(1 - newProgress, 3);
+          setSlideProgress(eased);
+          
+          if (newProgress >= 1) {
+            setIsSliding(false);
+            setSlideProgress(0);
+            setCarouselIndex((carouselIndex + 1) % photos.length);
+            lastCarouselSwitchRef.current = now;
+          }
+        } else if (now - lastCarouselSwitchRef.current >= interval) {
+          setIsSliding(true);
+          slideStartRef.current = now;
+        }
+      }
+    }
+    
+    // 更新每张照片的位置
+    const baseRotation = rotationRef.current;
+    const shrinkEased = 1 - Math.pow(1 - shrinkProgressRef.current, 3);
+    
+    photoRefs.current.forEach((ref, i) => {
+      if (!ref) return;
+      
+      const baseAngle = (i / photos.length) * Math.PI * 2;
+      const currentAngle = baseAngle + baseRotation;
+      
+      // 计算环绕位置
+      const orbitX = Math.cos(currentAngle) * orbitRadius;
+      const orbitY = 0;
+      const orbitZ = Math.sin(currentAngle) * orbitRadius;
+      
+      // 根据阶段计算目标位置
+      let targetX: number, targetY: number, targetZ: number, targetScale: number;
+      let targetOpacity = progress;
+      
+      if (phase === 'orbit') {
+        targetX = orbitX;
+        targetY = orbitY;
+        targetZ = orbitZ;
+        targetScale = photoSize;
+      } else if (phase === 'shrinking') {
+        // 收缩到中心，同时放大到轮播尺寸
+        targetX = orbitX * (1 - shrinkEased);
+        targetY = orbitY * (1 - shrinkEased);
+        targetZ = orbitZ * (1 - shrinkEased) + 0.5 * shrinkEased;
+        // 从环绕尺寸过渡到轮播尺寸
+        targetScale = photoSize + (carouselScale - photoSize) * shrinkEased;
+        // 非当前照片逐渐隐藏
+        if (i !== carouselIndex) {
+          targetOpacity = progress * (1 - shrinkEased);
+        }
+      } else {
+        // 轮播阶段：当前照片在中心，其他隐藏
+        const isCurrent = i === carouselIndex;
+        const isNext = i === (carouselIndex + 1) % photos.length;
+        
+        if (isCurrent) {
+          const slideOffset = isSliding ? slideProgress * (isMobileDevice ? 3.5 : 6) : 0;
+          targetX = -slideOffset;
+          targetY = 0;
+          targetZ = 0.5;
+          targetScale = carouselScale;
+          targetOpacity = progress * (isSliding ? (1 - slideProgress * 0.5) : 1);
+        } else if (isNext && isSliding) {
+          const slideDistance = isMobileDevice ? 3.5 : 6;
+          targetX = slideDistance - slideProgress * slideDistance;
+          targetY = 0;
+          targetZ = 0.5;
+          targetScale = carouselScale;
+          targetOpacity = progress * slideProgress;
+        } else {
+          targetX = 0;
+          targetY = 0;
+          targetZ = -5;
+          targetScale = 0.01;
+          targetOpacity = 0;
+        }
+      }
+      
+      // 平滑过渡
+      ref.position.x += (targetX - ref.position.x) * 0.15;
+      ref.position.y += (targetY - ref.position.y) * 0.15;
+      ref.position.z += (targetZ - ref.position.z) * 0.15;
+      ref.scale.setScalar(ref.scale.x + (targetScale - ref.scale.x) * 0.1);
+      
+      // 更新透明度
+      ref.traverse((child) => {
+        if (child instanceof THREE.Mesh && child.material) {
+          const mat = child.material as THREE.MeshBasicMaterial;
+          if (mat.opacity !== undefined) {
+            mat.opacity += (targetOpacity * 0.95 - mat.opacity) * 0.1;
+          }
+        }
+      });
+      
+      // 始终面向相机
+      ref.lookAt(state.camera.position);
+    });
+  });
+  
+  // 处理点击暂停/继续
+  const handleClick = () => {
+    onPausedChange?.(!paused);
+  };
+  
+  if (!visible || photos.length === 0) return null;
+  
+  return (
+    <group ref={groupRef} onClick={handleClick}>
+      {photos.map((photo, index) => (
+        <group
+          key={index}
+          ref={(el) => { if (el) photoRefs.current[index] = el; }}
+          scale={photoSize * progress}
+        >
+          <OrbitingPhotoFrame
+            photoUrl={photo}
+            opacity={progress}
+            frameColor={frameColor}
+            isMobileDevice={isMobileDevice}
+          />
+        </group>
+      ))}
+    </group>
+  );
+};
+
+// 单个环绕照片相框
+const OrbitingPhotoFrame = ({
+  photoUrl,
+  opacity,
+  frameColor = '#FFFFFF',
+  isMobileDevice = false
+}: {
+  photoUrl: string;
+  opacity: number;
+  frameColor?: string;
+  isMobileDevice?: boolean;
+}) => {
+  const texture = useLoader(THREE.TextureLoader, photoUrl);
+  const [dimensions, setDimensions] = useState({ width: 3, height: 4 });
+  
+  useEffect(() => {
+    if (texture) {
+      texture.minFilter = THREE.LinearFilter;
+      texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false;
+      texture.anisotropy = 16;
+      texture.needsUpdate = true;
+      
+      const image = texture.image;
+      if (image && image.width && image.height) {
+        const aspectRatio = image.width / image.height;
+        const baseSize = isMobileDevice ? 2.5 : 3.5;
+        
+        let photoWidth: number, photoHeight: number;
+        if (aspectRatio >= 1) {
+          photoWidth = baseSize;
+          photoHeight = baseSize / aspectRatio;
+        } else {
+          photoWidth = baseSize * aspectRatio;
+          photoHeight = baseSize;
+        }
+        
+        setDimensions({ width: photoWidth, height: photoHeight });
+      }
+    }
+  }, [texture, isMobileDevice]);
+  
+  if (!texture) return null;
+  
+  const frameWidth = 0.12;
+  const { width: photoWidth, height: photoHeight } = dimensions;
+  
+  return (
+    <group>
+      {/* 相框背景 */}
+      <mesh position={[0, 0, -0.02]}>
+        <planeGeometry args={[photoWidth + frameWidth * 2, photoHeight + frameWidth * 2]} />
+        <meshBasicMaterial 
+          color={frameColor}
+          transparent 
+          opacity={opacity}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+      
+      {/* 照片 */}
+      <mesh position={[0, 0, 0]}>
+        <planeGeometry args={[photoWidth, photoHeight]} />
+        <meshBasicMaterial 
+          map={texture} 
+          transparent 
+          opacity={opacity}
+          side={THREE.DoubleSide}
+          depthWrite={false}
+        />
+      </mesh>
+    </group>
+  );
+};
+
+// 浪漫粒子效果 - 小爱心和星星
+const RomanticParticles = ({
+  visible,
+  progress,
+  count = 50
+}: {
+  visible: boolean;
+  progress: number;
+  count?: number;
+}) => {
+  const pointsRef = useRef<THREE.Points>(null);
+  const materialRef = useRef<THREE.PointsMaterial>(null);
+  
+  const positions = useMemo(() => {
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 5 + Math.random() * 10;
+      arr[i * 3] = Math.cos(angle) * radius;
+      arr[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      arr[i * 3 + 2] = Math.sin(angle) * radius;
+    }
+    return arr;
+  }, [count]);
+  
+  const velocities = useMemo(() => {
+    const arr = new Float32Array(count * 3);
+    for (let i = 0; i < count; i++) {
+      arr[i * 3] = (Math.random() - 0.5) * 0.02;
+      arr[i * 3 + 1] = Math.random() * 0.03 + 0.01;
+      arr[i * 3 + 2] = (Math.random() - 0.5) * 0.02;
+    }
+    return arr;
+  }, [count]);
+  
+  useFrame(() => {
+    if (!pointsRef.current || !materialRef.current) return;
+    
+    const posAttr = pointsRef.current.geometry.attributes.position;
+    const posArray = posAttr.array as Float32Array;
+    
+    for (let i = 0; i < count; i++) {
+      posArray[i * 3] += velocities[i * 3];
+      posArray[i * 3 + 1] += velocities[i * 3 + 1];
+      posArray[i * 3 + 2] += velocities[i * 3 + 2];
+      
+      // 超出范围重置
+      if (posArray[i * 3 + 1] > 8) {
+        posArray[i * 3 + 1] = -5;
+        const angle = Math.random() * Math.PI * 2;
+        const radius = 5 + Math.random() * 10;
+        posArray[i * 3] = Math.cos(angle) * radius;
+        posArray[i * 3 + 2] = Math.sin(angle) * radius;
+      }
+    }
+    
+    posAttr.needsUpdate = true;
+    materialRef.current.opacity = progress * 0.6;
+  });
+  
+  if (!visible) return null;
+  
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        ref={materialRef}
+        color="#FFB6C1"
+        size={0.15}
+        transparent
+        opacity={0}
+        sizeAttenuation
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+};
 
 // 简单的伪随机数生成器（基于种子）
 const seededRandom = (seed: number) => {
@@ -785,13 +1166,15 @@ export const HeartParticles = ({
   glowTrail = { enabled: true },
   bottomText,
   textColor = '#FFD700',
-  textSize = 1
+  textSize = 1,
+  onPausedChange
 }: HeartParticlesProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const pointsRef = useRef<THREE.Points>(null);
   const materialRef = useRef<THREE.PointsMaterial>(null);
   const progressRef = useRef(0);
   const [progress, setProgress] = useState(0); // 用于触发子组件更新
+  const [paused, setPaused] = useState(false); // 暂停状态
   const initializedRef = useRef(false);
   const timeRef = useRef(0); // 动画时间
   const { camera } = useThree();
@@ -808,11 +1191,26 @@ export const HeartParticles = ({
     return new Float32Array(scatteredPositions);
   }, [scatteredPositions]);
   
+  // 处理暂停状态变化
+  const handlePausedChange = (newPaused: boolean) => {
+    setPaused(newPaused);
+    onPausedChange?.(newPaused);
+  };
+  
+  // visible 变化时重置暂停状态
+  useEffect(() => {
+    if (!visible) {
+      setPaused(false);
+    }
+  }, [visible]);
+  
   useFrame((_, delta) => {
     if (!pointsRef.current || !groupRef.current || !materialRef.current) return;
     
-    // 更新动画时间
-    timeRef.current += delta;
+    // 更新动画时间（暂停时不更新）
+    if (!paused) {
+      timeRef.current += delta;
+    }
     const time = timeRef.current;
     
     // 计算目标位置（相机前方）
@@ -897,6 +1295,16 @@ export const HeartParticles = ({
     materialRef.current.size = 0.25 * size * breathe * (1 + Math.sin(time * 3) * 0.1 * eased);
   });
   
+  // 获取要显示的照片列表
+  const photosToShow = centerPhotos && centerPhotos.length > 0 
+    ? centerPhotos 
+    : centerPhoto 
+      ? [centerPhoto] 
+      : [];
+  
+  // 多张照片使用统一展示组件，单张照片使用轮播组件
+  const useUnifiedDisplay = photosToShow.length > 1;
+  
   return (
     <group ref={groupRef}>
       <points ref={pointsRef}>
@@ -925,7 +1333,7 @@ export const HeartParticles = ({
         config={{
           enabled: glowTrail?.enabled ?? true,
           color: glowTrail?.color || '#FF69B4',
-          headColor: glowTrail?.headColor,  // 默认与 color 相同
+          headColor: glowTrail?.headColor,
           speed: glowTrail?.speed || 3,
           count: glowTrail?.count || 2,
           size: glowTrail?.size || 1.5,
@@ -933,10 +1341,22 @@ export const HeartParticles = ({
         }}
       />
       
-      {/* 中心相框轮播 */}
-      {(centerPhotos && centerPhotos.length > 0) ? (
+      {/* 照片展示 - 统一模式 */}
+      {useUnifiedDisplay ? (
+        <UnifiedPhotoDisplay
+          photos={photosToShow}
+          visible={visible}
+          progress={progress}
+          interval={photoInterval}
+          photoScale={photoScale}
+          frameColor={frameColor}
+          isMobileDevice={isMobile()}
+          paused={paused}
+          onPausedChange={handlePausedChange}
+        />
+      ) : photosToShow.length === 1 ? (
         <PhotoCarousel 
-          photos={centerPhotos} 
+          photos={photosToShow} 
           visible={visible} 
           progress={progress}
           interval={photoInterval}
@@ -944,16 +1364,16 @@ export const HeartParticles = ({
           frameColor={frameColor}
           isMobileDevice={isMobile()}
         />
-      ) : centerPhoto ? (
-        <PhotoCarousel 
-          photos={[centerPhoto]} 
-          visible={visible} 
-          progress={progress}
-          photoScale={photoScale}
-          frameColor={frameColor}
-          isMobileDevice={isMobile()}
-        />
       ) : null}
+      
+      {/* 浪漫粒子效果 - 多张照片时显示 */}
+      {useUnifiedDisplay && (
+        <RomanticParticles
+          visible={visible}
+          progress={progress}
+          count={30}
+        />
+      )}
       
       {/* 底部文字粒子 */}
       {bottomText && (
