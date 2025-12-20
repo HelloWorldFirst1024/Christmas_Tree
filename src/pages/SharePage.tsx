@@ -45,6 +45,8 @@ export default function SharePage({ shareId }: SharePageProps) {
 
   // 加载状态
   const [loading, setLoading] = useState(true);
+  const [loadingStage, setLoadingStage] = useState<string>('正在连接服务器...');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [shareData, setShareData] = useState<ShareData | null>(null);
 
@@ -166,7 +168,16 @@ export default function SharePage({ shareId }: SharePageProps) {
   useEffect(() => {
     const loadShare = async () => {
       setLoading(true);
+      setLoadingProgress(0);
+      setLoadingStage('正在连接服务器...');
+      
+      // 模拟网络延迟的进度
+      const progressTimer = setInterval(() => {
+        setLoadingProgress(prev => Math.min(prev + 5, 30));
+      }, 100);
+      
       const data = await getShare(shareId);
+      clearInterval(progressTimer);
       
       if (!data) {
         setError('分享不存在或已过期');
@@ -174,10 +185,35 @@ export default function SharePage({ shareId }: SharePageProps) {
         return;
       }
       
+      setLoadingProgress(40);
+      setLoadingStage('正在解析配置...');
+      
       // 安全验证：清理配置和照片数据
       const sanitizedConfig = sanitizeShareConfig(data.config);
       const sanitizedPhotos = sanitizePhotos(data.photos);
       const sanitizedMessage = sanitizeText(data.message, 100);
+      
+      setLoadingProgress(50);
+      setLoadingStage(`正在加载 ${sanitizedPhotos.length} 张照片...`);
+      
+      // 预加载照片
+      if (sanitizedPhotos.length > 0) {
+        const loadPromises = sanitizedPhotos.map((photo, index) => {
+          return new Promise<void>((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+              setLoadingProgress(50 + Math.floor((index + 1) / sanitizedPhotos.length * 30));
+              resolve();
+            };
+            img.onerror = () => resolve(); // 即使失败也继续
+            img.src = photo;
+          });
+        });
+        await Promise.all(loadPromises);
+      }
+      
+      setLoadingProgress(85);
+      setLoadingStage('正在初始化 3D 场景...');
       
       // 更新分享数据（使用清理后的数据）
       setShareData({
@@ -205,7 +241,13 @@ export default function SharePage({ shareId }: SharePageProps) {
         }
       }
       
-      setLoading(false);
+      setLoadingProgress(100);
+      setLoadingStage('加载完成！');
+      
+      // 短暂延迟后隐藏加载界面
+      setTimeout(() => {
+        setLoading(false);
+      }, 300);
     };
     
     loadShare();
@@ -637,14 +679,62 @@ export default function SharePage({ shareId }: SharePageProps) {
         height: '100vh',
         backgroundColor: '#000',
         display: 'flex',
+        flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
         color: '#FFD700',
-        fontSize: '24px',
         fontFamily: 'sans-serif',
-        gap: '12px'
+        gap: '24px',
+        padding: '20px'
       }}>
-        <Loader size={28} className="spin" /> 加载中...
+        {/* 圣诞树图标 */}
+        <div style={{ fontSize: '48px', marginBottom: '10px' }}>🎄</div>
+        
+        {/* 标题 */}
+        <div style={{ fontSize: '20px', fontWeight: 'bold' }}>
+          正在加载圣诞树
+        </div>
+        
+        {/* 进度条容器 */}
+        <div style={{
+          width: '280px',
+          maxWidth: '80vw',
+          height: '8px',
+          backgroundColor: 'rgba(255, 215, 0, 0.2)',
+          borderRadius: '4px',
+          overflow: 'hidden'
+        }}>
+          {/* 进度条 */}
+          <div style={{
+            width: `${loadingProgress}%`,
+            height: '100%',
+            backgroundColor: '#FFD700',
+            borderRadius: '4px',
+            transition: 'width 0.3s ease-out',
+            boxShadow: '0 0 10px rgba(255, 215, 0, 0.5)'
+          }} />
+        </div>
+        
+        {/* 进度百分比 */}
+        <div style={{ 
+          fontSize: '14px', 
+          color: 'rgba(255, 215, 0, 0.8)',
+          marginTop: '-12px'
+        }}>
+          {loadingProgress}%
+        </div>
+        
+        {/* 当前阶段 */}
+        <div style={{ 
+          fontSize: '14px', 
+          color: 'rgba(255, 255, 255, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <Loader size={16} className="spin" />
+          {loadingStage}
+        </div>
       </div>
     );
   }
@@ -815,13 +905,49 @@ export default function SharePage({ shareId }: SharePageProps) {
         )}
       </div>
 
-      {/* AI 状态 */}
+      {/* AI 加载状态 - 加载中时显示更明显的提示 */}
+      {(aiStatus.includes('LOADING') || aiStatus.includes('REQUESTING')) && (
+        <div style={{
+          position: 'fixed',
+          bottom: mobile ? '100px' : '120px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          color: '#FFD700',
+          padding: '12px 20px',
+          borderRadius: '12px',
+          fontSize: '14px',
+          fontFamily: 'sans-serif',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          zIndex: 200,
+          boxShadow: '0 4px 20px rgba(0, 0, 0, 0.5)',
+          border: '1px solid rgba(255, 215, 0, 0.3)'
+        }}>
+          <Loader size={18} className="spin" />
+          <div>
+            <div style={{ fontWeight: 'bold' }}>
+              {aiStatus.includes('LOADING') ? '正在加载 AI 手势识别...' : '正在请求摄像头权限...'}
+            </div>
+            <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)', marginTop: '2px' }}>
+              {aiStatus.includes('LOADING') ? '首次加载可能需要几秒钟' : '请允许摄像头访问以启用手势控制'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI 状态 - 顶部小标签 */}
       <div style={{
         position: 'absolute',
         top: '20px',
         left: '50%',
         transform: 'translateX(-50%)',
-        color: aiStatus.includes('ERROR') || aiStatus.includes('DISABLED') ? '#888' : 'rgba(255, 215, 0, 0.4)',
+        color: aiStatus.includes('ERROR') || aiStatus.includes('DISABLED') || aiStatus.includes('DENIED') 
+          ? '#888' 
+          : aiStatus.includes('READY') 
+            ? 'rgba(100, 255, 100, 0.6)' 
+            : 'rgba(255, 215, 0, 0.4)',
         fontSize: '10px',
         letterSpacing: '2px',
         zIndex: 10,
@@ -829,7 +955,7 @@ export default function SharePage({ shareId }: SharePageProps) {
         padding: '4px 8px',
         borderRadius: '4px'
       }}>
-        {aiStatus} {currentGesture && `| ${currentGesture}`}
+        {aiStatus === 'AI READY' ? '✓ AI 就绪' : aiStatus} {currentGesture && `| ${currentGesture}`}
       </div>
 
       {/* 标题 */}

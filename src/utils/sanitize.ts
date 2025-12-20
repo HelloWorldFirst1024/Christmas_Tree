@@ -162,10 +162,27 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
   // 圣诞元素配置
   if (cfg.elements && typeof cfg.elements === 'object') {
     const e = cfg.elements as Record<string, unknown>;
-    sanitized.elements = {
+    const elements: Record<string, unknown> = {
       enabled: sanitizeBoolean(e.enabled, true),
       count: sanitizeNumber(e.count, 50, 1000, 500)
     };
+    // 装饰类型开关
+    if (e.types && typeof e.types === 'object') {
+      const t = e.types as Record<string, unknown>;
+      elements.types = {
+        box: sanitizeBoolean(t.box, true),
+        sphere: sanitizeBoolean(t.sphere, true),
+        cylinder: sanitizeBoolean(t.cylinder, true)
+      };
+    }
+    // 闪烁配置
+    if (e.twinkle && typeof e.twinkle === 'object') {
+      const tw = e.twinkle as Record<string, unknown>;
+      elements.twinkle = {
+        enabled: sanitizeBoolean(tw.enabled, true),
+        speed: sanitizeNumber(tw.speed, 0.5, 3, 1)
+      };
+    }
     // 自定义图片需要验证
     if (e.customImages && typeof e.customImages === 'object') {
       const ci = e.customImages as Record<string, unknown>;
@@ -183,7 +200,7 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
         if (cylinderImg) customImages.cylinder = cylinderImg;
       }
       if (Object.keys(customImages).length > 0) {
-        (sanitized.elements as Record<string, unknown>).customImages = customImages;
+        elements.customImages = customImages;
       }
     }
     // 自定义颜色验证
@@ -197,9 +214,10 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
         }
       }
       if (Object.keys(colors).length > 0) {
-        (sanitized.elements as Record<string, unknown>).colors = colors;
+        elements.colors = colors;
       }
     }
+    sanitized.elements = elements;
   }
   
   // 雪花配置
@@ -304,7 +322,11 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
     const fo = cfg.fog as Record<string, unknown>;
     const fog: Record<string, unknown> = {
       enabled: sanitizeBoolean(fo.enabled, true),
-      opacity: sanitizeNumber(fo.opacity, 0.1, 1, 0.3)
+      opacity: sanitizeNumber(fo.opacity, 0.1, 1, 0.3),
+      count: sanitizeNumber(fo.count, 100, 5000, 1000),
+      size: sanitizeNumber(fo.size, 0.5, 5, 2),
+      spread: sanitizeNumber(fo.spread, 0.5, 3, 1.2),
+      height: sanitizeNumber(fo.height, 0.5, 3, 1)
     };
     if (typeof fo.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(fo.color)) {
       fog.color = fo.color;
@@ -324,10 +346,36 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
   if (cfg.heartEffect && typeof cfg.heartEffect === 'object') {
     const he = cfg.heartEffect as Record<string, unknown>;
     const heartEffect: Record<string, unknown> = {
-      size: sanitizeNumber(he.size, 0.5, 2, 1)
+      size: sanitizeNumber(he.size, 0.5, 2, 1),
+      photoInterval: sanitizeNumber(he.photoInterval, 1000, 10000, 3000),
+      photoScale: sanitizeNumber(he.photoScale, 0.5, 3, 1),
+      bottomTextSize: sanitizeNumber(he.bottomTextSize, 0.5, 2, 1)
     };
     if (typeof he.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(he.color)) {
       heartEffect.color = he.color;
+    }
+    if (typeof he.frameColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(he.frameColor)) {
+      heartEffect.frameColor = he.frameColor;
+    }
+    if (typeof he.bottomText === 'string') {
+      heartEffect.bottomText = sanitizeText(he.bottomText, 50);
+    }
+    if (typeof he.bottomTextColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(he.bottomTextColor)) {
+      heartEffect.bottomTextColor = he.bottomTextColor;
+    }
+    // 流光效果配置
+    if (he.glowTrail && typeof he.glowTrail === 'object') {
+      const gt = he.glowTrail as Record<string, unknown>;
+      const glowTrail: Record<string, unknown> = {
+        enabled: sanitizeBoolean(gt.enabled, true),
+        speed: sanitizeNumber(gt.speed, 1, 10, 3),
+        count: sanitizeNumber(gt.count, 1, 5, 2),
+        size: sanitizeNumber(gt.size, 0.5, 3, 1.5)
+      };
+      if (typeof gt.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(gt.color)) {
+        glowTrail.color = gt.color;
+      }
+      heartEffect.glowTrail = glowTrail;
     }
     sanitized.heartEffect = heartEffect;
   }
@@ -361,6 +409,44 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
       spiralRibbon.glowColor = sr.glowColor;
     }
     sanitized.spiralRibbon = spiralRibbon;
+  }
+  
+  // 发光流线配置
+  if (cfg.glowingStreaks && typeof cfg.glowingStreaks === 'object') {
+    const gs = cfg.glowingStreaks as Record<string, unknown>;
+    const glowingStreaks: Record<string, unknown> = {
+      enabled: sanitizeBoolean(gs.enabled, false),
+      count: sanitizeNumber(gs.count, 1, 10, 5),
+      speed: sanitizeNumber(gs.speed, 0.5, 3, 1),
+      tailLength: sanitizeNumber(gs.tailLength, 0.5, 2, 1.2),
+      lineWidth: sanitizeNumber(gs.lineWidth, 1, 8, 3)
+    };
+    if (typeof gs.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(gs.color)) {
+      glowingStreaks.color = gs.color;
+    }
+    sanitized.glowingStreaks = glowingStreaks;
+  }
+  
+  // 圣诞树形状配置
+  if (cfg.treeShape && typeof cfg.treeShape === 'object') {
+    const ts = cfg.treeShape as Record<string, unknown>;
+    sanitized.treeShape = {
+      height: sanitizeNumber(ts.height, 10, 50, 25),
+      radius: sanitizeNumber(ts.radius, 3, 20, 10)
+    };
+  }
+  
+  // 照片装饰配置
+  if (cfg.photoOrnaments && typeof cfg.photoOrnaments === 'object') {
+    const po = cfg.photoOrnaments as Record<string, unknown>;
+    const photoOrnaments: Record<string, unknown> = {
+      enabled: sanitizeBoolean(po.enabled, true),
+      scale: sanitizeNumber(po.scale, 0.5, 2, 1.5)
+    };
+    if (typeof po.frameColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(po.frameColor)) {
+      photoOrnaments.frameColor = po.frameColor;
+    }
+    sanitized.photoOrnaments = photoOrnaments;
   }
   
   // 手势文字配置
@@ -424,17 +510,19 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
   // 音乐配置
   if (cfg.music && typeof cfg.music === 'object') {
     const m = cfg.music as Record<string, unknown>;
-    sanitized.music = {
+    const music: Record<string, unknown> = {
       selected: sanitizeText(m.selected, 50) || 'christmas-stars',
-      volume: sanitizeNumber(m.volume, 0, 1, 0.5)
+      volume: sanitizeNumber(m.volume, 0, 1, 0.5),
+      showLyrics: sanitizeBoolean(m.showLyrics, true)
     };
     // 自定义音乐 URL（base64）
     if (m.customUrl && typeof m.customUrl === 'string') {
       // 验证是否为 audio data URL
       if (m.customUrl.startsWith('data:audio/')) {
-        (sanitized.music as Record<string, unknown>).customUrl = m.customUrl;
+        music.customUrl = m.customUrl;
       }
     }
+    sanitized.music = music;
   }
   
   // 手势配置
