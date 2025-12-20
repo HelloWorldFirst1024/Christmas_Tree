@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Experience, GestureController, TitleOverlay, WelcomeTutorial, IntroOverlay, CenterPhoto, CSSTextEffect, LyricsDisplay, photoScreenPositions } from '../components';
+import { Experience, GestureController, TitleOverlay, WelcomeTutorial, IntroOverlay, CenterPhoto, LyricsDisplay, photoScreenPositions } from '../components';
 import { CHRISTMAS_MUSIC_URL } from '../config';
 import { isMobile, isTablet, getDefaultSceneConfig, toggleFullscreen, isFullscreen, isFullscreenSupported, enterFullscreen, lockLandscape } from '../utils/helpers';
 import { sanitizeShareConfig, sanitizePhotos, sanitizeText } from '../utils/sanitize';
@@ -11,17 +11,6 @@ import type { SceneState, SceneConfig } from '../types';
 import { PRESET_MUSIC } from '../types';
 import { useTimeline } from '../hooks/useTimeline';
 import { Volume2, VolumeX, TreePine, Sparkles, Loader, Frown, HelpCircle, Play, Maximize, Minimize, RotateCcw } from 'lucide-react';
-
-// 检测文字是否包含中文
-const containsChinese = (text: string): boolean => /[\u4e00-\u9fa5]/.test(text);
-
-// 判断是否应该使用 CSS 文字特效
-const shouldUseCSSText = (text: string, animation?: string): boolean => {
-  if (!animation || animation === 'auto') {
-    return containsChinese(text);
-  }
-  return animation !== 'particle';
-};
 
 // 深度合并配置对象
 function deepMergeConfig<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
@@ -94,8 +83,17 @@ export default function SharePage({ shareId }: SharePageProps) {
   // Refs
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const heartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textSwitchRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const textEffectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textSwitchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // 配置 refs（避免 useCallback 依赖变化导致重新创建）
+  const configuredTextsRef = useRef<string[]>([]);
+  const textSwitchIntervalRef = useRef<number>(3000);
+  const hideTreeConfigRef = useRef<boolean>(true);
+  
+  // 手势状态 refs
+  const lastGestureRef = useRef<string>('');
+  const gestureActiveRef = useRef<boolean>(false);
 
   // 从分享数据加载配置（移动端/平板使用最低配置）
   const [sceneConfig, setSceneConfig] = useState<SceneConfig>(() => {
@@ -111,12 +109,25 @@ export default function SharePage({ shareId }: SharePageProps) {
     return (isMobile() || isTablet()) && isFullscreenSupported();
   });
 
-  // 获取已配置的文字列表
-  const configuredTexts = sceneConfig.gestureTexts || 
-    (sceneConfig.gestureText ? [sceneConfig.gestureText] : ['MERRY CHRISTMAS']);
+  // 获取已配置的文字列表（使用 useMemo 稳定引用）
+  const configuredTexts = useMemo(() => 
+    sceneConfig.gestureTexts || 
+    (sceneConfig.gestureText ? [sceneConfig.gestureText] : ['MERRY CHRISTMAS']),
+    [sceneConfig.gestureTexts, sceneConfig.gestureText]
+  );
 
   // 获取照片轮播间隔配置
   const heartPhotoInterval = (sceneConfig.heartEffect as { photoInterval?: number } | undefined)?.photoInterval || 3000;
+
+  // 获取文字切换间隔（毫秒）
+  const textSwitchIntervalMs = (sceneConfig.textSwitchInterval || 3) * 1000;
+
+  // 同步配置到 refs（避免 useCallback 依赖变化）
+  useEffect(() => {
+    configuredTextsRef.current = configuredTexts;
+    textSwitchIntervalRef.current = textSwitchIntervalMs;
+    hideTreeConfigRef.current = sceneConfig.gestureEffect?.hideTree ?? true;
+  }, [configuredTexts, textSwitchIntervalMs, sceneConfig.gestureEffect?.hideTree]);
 
   // 时间轴完成回调
   const handleTimelineComplete = useCallback(() => {
@@ -129,7 +140,8 @@ export default function SharePage({ shareId }: SharePageProps) {
     shareData?.photos?.length || 0,
     handleTimelineComplete,
     configuredTexts,
-    heartPhotoInterval
+    heartPhotoInterval,
+    textSwitchIntervalMs
   );
 
   // 监听全屏状态变化
@@ -212,7 +224,7 @@ export default function SharePage({ shareId }: SharePageProps) {
     // 如果有多条文字，启动轮播
     if (texts.length > 1) {
       let idx = 0;
-      textSwitchRef.current = setInterval(() => {
+      textSwitchTimerRef.current = setInterval(() => {
         idx = (idx + 1) % texts.length;
         setCurrentTextIndex(idx);
       }, switchInterval);
@@ -227,14 +239,124 @@ export default function SharePage({ shareId }: SharePageProps) {
     const timer = setTimeout(() => {
       setShowText(false);
       setHideTree(false);
-      if (textSwitchRef.current) clearInterval(textSwitchRef.current);
+      if (textSwitchTimerRef.current) clearInterval(textSwitchTimerRef.current);
     }, totalDuration);
     
     return () => {
       clearTimeout(timer);
-      if (textSwitchRef.current) clearInterval(textSwitchRef.current);
+      if (textSwitchTimerRef.current) clearInterval(textSwitchTimerRef.current);
     };
   }, [preloadTextPlayed, shareData, sceneConfig]);
+
+  // 统一的文字特效控制函数（使用 refs 避免依赖变化）
+  const startTextEffect = useCallback((duration?: number) => {
+    // 清理之前的定时器
+    if (textEffectTimerRef.current) {
+      clearTimeout(textEffectTimerRef.current);
+      textEffectTimerRef.current = null;
+    }
+    if (textSwitchTimerRef.current) {
+      clearInterval(textSwitchTimerRef.current);
+      textSwitchTimerRef.current = null;
+    }
+
+    const texts = configuredTextsRef.current;
+    const switchInterval = textSwitchIntervalRef.current;
+    const hideTree = hideTreeConfigRef.current;
+
+    // 重置并显示
+    setCurrentTextIndex(0);
+    setShowText(true);
+    setShowHeart(false);
+    if (hideTree) setHideTree(true);
+
+    // 如果有多条文字，启动轮播
+    if (texts.length > 1) {
+      let idx = 0;
+      textSwitchTimerRef.current = setInterval(() => {
+        idx = (idx + 1) % texts.length;
+        setCurrentTextIndex(idx);
+      }, switchInterval);
+    }
+
+    // 如果设置了持续时间，启动结束定时器
+    if (duration && duration > 0) {
+      textEffectTimerRef.current = setTimeout(() => {
+        // 内联停止逻辑，避免调用 stopTextEffect
+        if (textEffectTimerRef.current) {
+          clearTimeout(textEffectTimerRef.current);
+          textEffectTimerRef.current = null;
+        }
+        if (textSwitchTimerRef.current) {
+          clearInterval(textSwitchTimerRef.current);
+          textSwitchTimerRef.current = null;
+        }
+        setShowText(false);
+        setCurrentTextIndex(0);
+        if (hideTreeConfigRef.current) setHideTree(false);
+        gestureActiveRef.current = false;
+      }, duration);
+    }
+  }, []); // 空依赖数组，函数引用永远不变
+
+  const stopTextEffect = useCallback(() => {
+    if (textEffectTimerRef.current) {
+      clearTimeout(textEffectTimerRef.current);
+      textEffectTimerRef.current = null;
+    }
+    if (textSwitchTimerRef.current) {
+      clearInterval(textSwitchTimerRef.current);
+      textSwitchTimerRef.current = null;
+    }
+    setShowText(false);
+    setCurrentTextIndex(0);
+    if (hideTreeConfigRef.current) setHideTree(false);
+  }, []); // 空依赖数组，函数引用永远不变
+
+  // 故事线步骤 - 简化版：文字特效只显示第一条，不轮播
+  const prevTimelineStepRef = useRef<number>(-1);
+  
+  useEffect(() => {
+    const { isPlaying, currentStep, currentStepIndex } = timeline.state;
+    const prevStepIndex = prevTimelineStepRef.current;
+    
+    // 步骤变化时处理
+    if (isPlaying && currentStepIndex !== prevStepIndex) {
+      // 文字步骤 - 简化：只显示第一条文字
+      if (currentStep?.type === 'text') {
+        setCurrentTextIndex(0);
+        setShowText(true);
+        setShowHeart(false);
+        setHideTree(true);
+      }
+      // 爱心步骤
+      else if (currentStep?.type === 'heart') {
+        setShowText(false);
+        if (heartTimeoutRef.current) clearTimeout(heartTimeoutRef.current);
+        setShowHeart(true);
+        setHideTree(true);
+      }
+      // 其他步骤（intro/photo/tree）- 关闭特效
+      else {
+        setShowText(false);
+        setShowHeart(false);
+        if (currentStep?.type !== 'tree') {
+          setHideTree(currentStep?.type === 'intro' || currentStep?.type === 'photo');
+        } else {
+          setHideTree(false);
+        }
+      }
+    }
+    
+    // 停止播放时清理
+    if (!isPlaying && prevStepIndex >= 0) {
+      setShowText(false);
+      setShowHeart(false);
+      setHideTree(false);
+    }
+    
+    prevTimelineStepRef.current = isPlaying ? currentStepIndex : -1;
+  }, [timeline.state.isPlaying, timeline.state.currentStepIndex]);
 
   // 默认手势配置
   const defaultGestures = {
@@ -247,15 +369,9 @@ export default function SharePage({ shareId }: SharePageProps) {
     ILoveYou: 'heart'
   };
 
-  // 上一次触发的手势（防止重复触发）
-  const lastGestureRef = useRef<string>('');
-  const gestureActiveRef = useRef<boolean>(false);
-
   // 执行手势动作
   const executeGestureAction = useCallback((action: string) => {
     const effectConfig = sceneConfig.gestureEffect || { duration: 5000, hideTree: true };
-    const texts = sceneConfig.gestureTexts || [sceneConfig.gestureText || shareData?.message || 'MERRY CHRISTMAS'];
-    const switchInterval = (sceneConfig.textSwitchInterval || 3) * 1000;
     
     switch (action) {
       case 'formed':
@@ -275,34 +391,16 @@ export default function SharePage({ shareId }: SharePageProps) {
           gestureActiveRef.current = false;
         }, effectConfig.duration);
         break;
-      case 'text':
-        if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
-        if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-        
-        setCurrentTextIndex(0);
-        setShowText(true);
-        setShowHeart(false);
-        if (effectConfig.hideTree) setHideTree(true);
-        
-        if (texts.length > 1) {
-          let idx = 0;
-          textSwitchRef.current = setInterval(() => {
-            idx = (idx + 1) % texts.length;
-            setCurrentTextIndex(idx);
-          }, switchInterval);
-        }
-        
+      case 'text': {
+        // 计算总时长：使用 refs 获取最新配置
+        const texts = configuredTextsRef.current;
+        const switchInterval = textSwitchIntervalRef.current;
         const totalDuration = texts.length > 1 
           ? Math.max(effectConfig.duration, texts.length * switchInterval)
           : effectConfig.duration;
-        
-        textTimeoutRef.current = setTimeout(() => {
-          setShowText(false);
-          if (effectConfig.hideTree) setHideTree(false);
-          if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-          gestureActiveRef.current = false;
-        }, totalDuration);
+        startTextEffect(totalDuration);
         break;
+      }
       case 'music':
         if (audioRef.current) {
           if (audioRef.current.paused) {
@@ -314,7 +412,7 @@ export default function SharePage({ shareId }: SharePageProps) {
           }
         }
         break;
-      case 'screenshot':
+      case 'screenshot': {
         const canvas = document.querySelector('canvas');
         if (canvas) {
           const link = document.createElement('a');
@@ -323,6 +421,7 @@ export default function SharePage({ shareId }: SharePageProps) {
           link.click();
         }
         break;
+      }
       case 'reset':
         setSceneState('FORMED');
         setRotationSpeed(0);
@@ -330,7 +429,7 @@ export default function SharePage({ shareId }: SharePageProps) {
       default:
         break;
     }
-  }, [sceneConfig, shareData]);
+  }, [sceneConfig, startTextEffect]);
 
   // 处理手势变化
   const handleGestureChange = useCallback((gesture: string) => {
@@ -609,24 +708,6 @@ export default function SharePage({ shareId }: SharePageProps) {
         duration={timeline.state.currentStep?.duration}
       />
 
-      {/* 时间轴模式 - CSS 文字特效 */}
-      {(() => {
-        const actualText = timeline.useConfiguredText 
-          ? configuredTexts[0] || 'MERRY CHRISTMAS'
-          : timeline.textContent || 'MERRY CHRISTMAS';
-        const shouldUseCSS = shouldUseCSSText(actualText, timeline.textAnimation);
-        
-        return (
-          <CSSTextEffect
-            text={actualText}
-            visible={timeline.showText && shouldUseCSS}
-            animation={timeline.textAnimation === 'particle' ? 'glow' : (timeline.textAnimation || 'glow')}
-            color={sceneConfig.textEffect?.color || '#FFD700'}
-            size={48}
-          />
-        );
-      })()}
-
       {/* 3D Canvas - 教程显示时暂停渲染 */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
@@ -650,15 +731,10 @@ export default function SharePage({ shareId }: SharePageProps) {
             selectedPhotoIndex={selectedPhotoIndex}
             onPhotoSelect={setSelectedPhotoIndex}
             photoPaths={shareData.photos}
-            showHeart={showHeart || timeline.showHeart}
-            showText={showText || (timeline.showText && !shouldUseCSSText(
-              timeline.useConfiguredText ? configuredTexts[0] || '' : timeline.textContent,
-              timeline.textAnimation
-            ))}
-            customMessage={timeline.showText 
-              ? (timeline.useConfiguredText ? configuredTexts[0] || 'MERRY CHRISTMAS' : timeline.textContent || 'MERRY CHRISTMAS')
-              : (sceneConfig.gestureTexts || [sceneConfig.gestureText || shareData.message || 'MERRY CHRISTMAS'])[currentTextIndex] || 'MERRY CHRISTMAS'}
-            hideTree={hideTree || (timeline.state.isPlaying && !timeline.showTree)}
+            showHeart={showHeart}
+            showText={showText}
+            customMessage={(sceneConfig.gestureTexts || [sceneConfig.gestureText || shareData.message || 'MERRY CHRISTMAS'])[currentTextIndex] || 'MERRY CHRISTMAS'}
+            hideTree={hideTree}
             heartCount={sceneConfig.gestureEffect?.heartCount || 1500}
             textCount={sceneConfig.gestureEffect?.textCount || 1000}
             heartCenterPhoto={timeline.heartPhotoIndex !== null ? shareData.photos[timeline.heartPhotoIndex] : undefined}

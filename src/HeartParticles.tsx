@@ -25,6 +25,10 @@ interface HeartParticlesProps {
     size?: number;          // 发光点大小
     tailLength?: number;    // 拖尾长度
   };
+  // 底部文字配置
+  bottomText?: string;      // 底部显示的文字
+  textColor?: string;       // 文字颜色
+  textSize?: number;        // 文字大小倍数
 }
 
 // 生成心形轮廓点（用于边框流动效果）
@@ -346,6 +350,219 @@ const _CenterPhotoPlane = ({ photoUrl, visible, progress }: { photoUrl: string; 
 };
 void _CenterPhotoPlane; // 避免 TS 未使用警告
 
+// 简单的伪随机数生成器（基于种子）
+const seededRandom = (seed: number) => {
+  const x = Math.sin(seed * 12.9898 + 78.233) * 43758.5453;
+  return x - Math.floor(x);
+};
+
+// 使用 Canvas 渲染文字并提取像素点位置（用于底部文字）
+const generateBottomTextPositions = (
+  text: string, 
+  scale: number, 
+  particleSeeds: Float32Array,
+  isMobileDevice: boolean,
+  yOffset: number = -8 // 底部偏移
+): Float32Array => {
+  const count = particleSeeds.length;
+  const targets = new Float32Array(count * 3);
+  
+  if (!text || text.trim() === '') {
+    for (let i = 0; i < count; i++) {
+      targets[i * 3] = (seededRandom(i * 1.1) - 0.5) * 20;
+      targets[i * 3 + 1] = yOffset + (seededRandom(i * 2.2) - 0.5) * 5;
+      targets[i * 3 + 2] = (seededRandom(i * 3.3) - 0.5) * 2;
+    }
+    return targets;
+  }
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) {
+    for (let i = 0; i < count; i++) {
+      targets[i * 3] = 0;
+      targets[i * 3 + 1] = yOffset;
+      targets[i * 3 + 2] = 0;
+    }
+    return targets;
+  }
+  
+  const fontSize = isMobileDevice ? 40 : 60;
+  const fontFamily = '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif';
+  
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  const metrics = ctx.measureText(text);
+  const textWidth = metrics.width;
+  const textHeight = fontSize * 1.2;
+  
+  const padding = 10;
+  canvas.width = Math.ceil(textWidth + padding * 2);
+  canvas.height = Math.ceil(textHeight + padding * 2);
+  
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  ctx.fillStyle = 'white';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width / 2, canvas.height / 2);
+  
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const pixels = imageData.data;
+  
+  const basePositions: { x: number; y: number }[] = [];
+  const sampleStep = isMobileDevice ? 3 : 2;
+  
+  for (let y = 0; y < canvas.height; y += sampleStep) {
+    for (let x = 0; x < canvas.width; x += sampleStep) {
+      const idx = (y * canvas.width + x) * 4;
+      const alpha = pixels[idx + 3];
+      if (alpha > 128) {
+        const posX = (x - canvas.width / 2) * scale * 0.08;
+        const posY = (canvas.height / 2 - y) * scale * 0.08 + yOffset;
+        basePositions.push({ x: posX, y: posY });
+      }
+    }
+  }
+  
+  if (basePositions.length === 0) {
+    for (let i = 0; i < count; i++) {
+      targets[i * 3] = 0;
+      targets[i * 3 + 1] = yOffset;
+      targets[i * 3 + 2] = 0;
+    }
+    return targets;
+  }
+  
+  for (let i = 0; i < count; i++) {
+    const seed = particleSeeds[i];
+    const baseIdx = Math.floor(seededRandom(seed * 1.1) * basePositions.length);
+    const base = basePositions[baseIdx];
+    
+    const offsetX = (seededRandom(seed * 2.2) - 0.5) * scale * 0.1;
+    const offsetY = (seededRandom(seed * 3.3) - 0.5) * scale * 0.1;
+    const offsetZ = (seededRandom(seed * 4.4) - 0.5) * 0.2;
+    
+    targets[i * 3] = base.x + offsetX;
+    targets[i * 3 + 1] = base.y + offsetY;
+    targets[i * 3 + 2] = offsetZ;
+  }
+  
+  return targets;
+};
+
+// 底部文字粒子组件
+const BottomTextParticles = ({
+  text,
+  visible,
+  progress,
+  color = '#FFD700',
+  size = 1
+}: {
+  text: string;
+  visible: boolean;
+  progress: number;
+  color?: string;
+  size?: number;
+}) => {
+  const pointsRef = useRef<THREE.Points>(null);
+  const materialRef = useRef<THREE.PointsMaterial>(null);
+  const lastTextRef = useRef(text);
+  const mobile = isMobile();
+  
+  const count = 1000;
+  
+  const particleSeeds = useMemo(() => {
+    const arr = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      arr[i] = i + 100.5;
+    }
+    return arr;
+  }, []);
+  
+  const randoms = useMemo(() => {
+    const arr = new Float32Array(count);
+    for (let i = 0; i < count; i++) {
+      arr[i] = seededRandom(i * 7.7);
+    }
+    return arr;
+  }, []);
+  
+  const targetPositionsRef = useRef<Float32Array>(new Float32Array(count * 3));
+  
+  // 计算底部偏移（根据是否有照片调整）
+  const yOffset = mobile ? -6 : -8;
+  
+  useEffect(() => {
+    const scale = mobile ? 0.8 : 1.0;
+    targetPositionsRef.current = generateBottomTextPositions(text, scale, particleSeeds, mobile, yOffset);
+    lastTextRef.current = text;
+  }, [text, particleSeeds, mobile, yOffset]);
+  
+  const initPositions = useMemo(() => {
+    const scale = mobile ? 0.8 : 1.0;
+    return generateBottomTextPositions(text, scale, particleSeeds, mobile, yOffset);
+  }, [text, particleSeeds, mobile, yOffset]);
+  
+  useFrame((state, delta) => {
+    if (!pointsRef.current || !materialRef.current) return;
+    
+    const posAttr = pointsRef.current.geometry.attributes.position;
+    const posArray = posAttr.array as Float32Array;
+    const time = state.clock.elapsedTime;
+    const targets = targetPositionsRef.current;
+    
+    const speed = 2.0;
+    const targetProgress = visible ? progress : 0;
+    
+    for (let i = 0; i < count; i++) {
+      const i3 = i * 3;
+      
+      // 散开位置
+      const scatterX = (seededRandom(i * 1.1) - 0.5) * 30;
+      const scatterY = yOffset + (seededRandom(i * 2.2) - 0.5) * 15;
+      const scatterZ = (seededRandom(i * 3.3) - 0.5) * 10;
+      
+      // 插值到目标位置
+      const targetX = scatterX + (targets[i3] - scatterX) * targetProgress;
+      const targetY = scatterY + (targets[i3 + 1] - scatterY) * targetProgress;
+      const targetZ = scatterZ + (targets[i3 + 2] - scatterZ) * targetProgress;
+      
+      posArray[i3] += (targetX - posArray[i3]) * delta * speed;
+      posArray[i3 + 1] += (targetY - posArray[i3 + 1]) * delta * speed;
+      posArray[i3 + 2] += (targetZ - posArray[i3 + 2]) * delta * speed;
+      
+      if (visible && progress > 0.5) {
+        posArray[i3] += Math.sin(time * 1.5 + randoms[i] * 10) * 0.002;
+        posArray[i3 + 1] += Math.cos(time * 1.5 + randoms[i] * 10) * 0.002;
+      }
+    }
+    
+    posAttr.needsUpdate = true;
+    
+    const targetOpacity = visible ? progress * 0.9 : 0;
+    materialRef.current.opacity += (targetOpacity - materialRef.current.opacity) * delta * 3;
+  });
+  
+  if (!text) return null;
+  
+  return (
+    <points ref={pointsRef} position={[0, 0, 0.3]}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[initPositions.slice(), 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        ref={materialRef}
+        color={color}
+        size={(mobile ? 0.1 : 0.18) * size}
+        transparent
+        opacity={0}
+        sizeAttenuation
+        depthWrite={false}
+        blending={THREE.AdditiveBlending}
+      />
+    </points>
+  );
+};
+
 // 创建圆形发光纹理
 const createGlowTexture = (): THREE.Texture => {
   const canvas = document.createElement('canvas');
@@ -565,7 +782,10 @@ export const HeartParticles = ({
   photoInterval = 3000,
   photoScale = 1,
   frameColor = '#FFFFFF',
-  glowTrail = { enabled: true }
+  glowTrail = { enabled: true },
+  bottomText,
+  textColor = '#FFD700',
+  textSize = 1
 }: HeartParticlesProps) => {
   const groupRef = useRef<THREE.Group>(null);
   const pointsRef = useRef<THREE.Points>(null);
@@ -734,6 +954,17 @@ export const HeartParticles = ({
           isMobileDevice={isMobile()}
         />
       ) : null}
+      
+      {/* 底部文字粒子 */}
+      {bottomText && (
+        <BottomTextParticles
+          text={bottomText}
+          visible={visible}
+          progress={progress}
+          color={textColor}
+          size={textSize}
+        />
+      )}
     </group>
   );
 };

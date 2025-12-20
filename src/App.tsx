@@ -1,7 +1,7 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, CSSTextEffect, photoScreenPositions } from './components';
+import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, photoScreenPositions } from './components';
 import { CHRISTMAS_MUSIC_URL } from './config';
 import { isMobile, isTablet, fileToBase64, getDefaultSceneConfig, toggleFullscreen, isFullscreen, isFullscreenSupported } from './utils/helpers';
 import { useTimeline } from './hooks/useTimeline';
@@ -13,19 +13,6 @@ import {
 import type { SceneState, SceneConfig, GestureConfig, GestureAction, MusicConfig } from './types';
 import { PRESET_MUSIC } from './types';
 import { Volume2, VolumeX, Camera, Settings, Wrench, Link, TreePine, Sparkles, Loader, HelpCircle, Shield, Heart, Type, Play, Maximize, Minimize } from 'lucide-react';
-
-// 检测文字是否包含中文
-const containsChinese = (text: string): boolean => /[\u4e00-\u9fa5]/.test(text);
-
-// 判断是否应该使用 CSS 文字特效（中文或非粒子动画）
-const shouldUseCSSText = (text: string, animation?: string): boolean => {
-  if (!animation || animation === 'auto') {
-    // 自动模式：中文用 CSS，英文用粒子
-    return containsChinese(text);
-  }
-  // 明确指定粒子效果时用 3D 粒子，其他用 CSS
-  return animation !== 'particle';
-};
 
 // 深度合并配置对象
 function deepMergeConfig<T extends Record<string, unknown>>(target: T, source: Partial<T>): T {
@@ -101,8 +88,17 @@ export default function GrandTreeApp() {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const heartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const textSwitchRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const textEffectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const textSwitchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  
+  // 配置 refs（避免 useCallback 依赖变化导致重新创建）
+  const configuredTextsRef = useRef<string[]>([]);
+  const textSwitchIntervalRef = useRef<number>(3000);
+  const hideTreeConfigRef = useRef<boolean>(true);
+  
+  // 手势状态 refs
+  const lastGestureRef = useRef<string>('');
+  const gestureActiveRef = useRef<boolean>(false);
 
   // 默认手势配置
   const defaultGestures: GestureConfig = {
@@ -191,12 +187,92 @@ export default function GrandTreeApp() {
   // 是否隐藏圣诞树（显示特效时）
   const [hideTree, setHideTree] = useState(false);
 
-  // 获取已配置的文字列表
-  const configuredTexts = sceneConfig.gestureTexts || 
-    (sceneConfig.gestureText ? [sceneConfig.gestureText] : ['MERRY CHRISTMAS']);
+  // 获取已配置的文字列表（使用 useMemo 稳定引用）
+  const configuredTexts = useMemo(() => 
+    sceneConfig.gestureTexts || 
+    (sceneConfig.gestureText ? [sceneConfig.gestureText] : ['MERRY CHRISTMAS']),
+    [sceneConfig.gestureTexts, sceneConfig.gestureText]
+  );
 
   // 获取照片轮播间隔配置
   const heartPhotoInterval = (sceneConfig.heartEffect as { photoInterval?: number } | undefined)?.photoInterval || 3000;
+
+  // 获取文字切换间隔（毫秒）
+  const textSwitchIntervalMs = (sceneConfig.textSwitchInterval || 3) * 1000;
+  
+  // 同步配置到 refs（避免 useCallback 依赖变化）
+  // 同步配置到 refs（避免 useCallback 依赖变化）
+  useEffect(() => {
+    configuredTextsRef.current = configuredTexts;
+    textSwitchIntervalRef.current = textSwitchIntervalMs;
+    hideTreeConfigRef.current = sceneConfig.gestureEffect?.hideTree ?? true;
+  }, [configuredTexts, textSwitchIntervalMs, sceneConfig.gestureEffect?.hideTree]);
+
+  // 统一的文字特效控制函数（使用 refs 避免依赖变化）
+  // 必须在 timeline useEffect 之前定义
+  const startTextEffect = useCallback((duration?: number) => {
+    // 清理之前的定时器
+    if (textEffectTimerRef.current) {
+      clearTimeout(textEffectTimerRef.current);
+      textEffectTimerRef.current = null;
+    }
+    if (textSwitchTimerRef.current) {
+      clearInterval(textSwitchTimerRef.current);
+      textSwitchTimerRef.current = null;
+    }
+
+    const texts = configuredTextsRef.current;
+    const switchInterval = textSwitchIntervalRef.current;
+    const hideTree = hideTreeConfigRef.current;
+
+    // 重置并显示
+    setCurrentTextIndex(0);
+    setShowText(true);
+    setShowHeart(false);
+    if (hideTree) setHideTree(true);
+
+    // 如果有多条文字，启动轮播
+    if (texts.length > 1) {
+      let idx = 0;
+      textSwitchTimerRef.current = setInterval(() => {
+        idx = (idx + 1) % texts.length;
+        setCurrentTextIndex(idx);
+      }, switchInterval);
+    }
+
+    // 如果设置了持续时间，启动结束定时器
+    if (duration && duration > 0) {
+      textEffectTimerRef.current = setTimeout(() => {
+        // 内联停止逻辑
+        if (textEffectTimerRef.current) {
+          clearTimeout(textEffectTimerRef.current);
+          textEffectTimerRef.current = null;
+        }
+        if (textSwitchTimerRef.current) {
+          clearInterval(textSwitchTimerRef.current);
+          textSwitchTimerRef.current = null;
+        }
+        setShowText(false);
+        setCurrentTextIndex(0);
+        if (hideTreeConfigRef.current) setHideTree(false);
+        gestureActiveRef.current = false;
+      }, duration);
+    }
+  }, []); // 空依赖数组，函数引用永远不变
+
+  const stopTextEffect = useCallback(() => {
+    if (textEffectTimerRef.current) {
+      clearTimeout(textEffectTimerRef.current);
+      textEffectTimerRef.current = null;
+    }
+    if (textSwitchTimerRef.current) {
+      clearInterval(textSwitchTimerRef.current);
+      textSwitchTimerRef.current = null;
+    }
+    setShowText(false);
+    setCurrentTextIndex(0);
+    if (hideTreeConfigRef.current) setHideTree(false);
+  }, []); // 空依赖数组，函数引用永远不变
 
   // 时间轴播放器
   const timeline = useTimeline(
@@ -204,8 +280,54 @@ export default function GrandTreeApp() {
     uploadedPhotos.length,
     handleTimelineComplete,
     configuredTexts,
-    heartPhotoInterval
+    heartPhotoInterval,
+    textSwitchIntervalMs
   );
+
+  // 故事线步骤 - 简化版：文字特效只显示第一条，不轮播
+  const prevTimelineStepRef = useRef<number>(-1);
+  
+  useEffect(() => {
+    const { isPlaying, currentStep, currentStepIndex } = timeline.state;
+    const prevStepIndex = prevTimelineStepRef.current;
+    
+    // 步骤变化时处理
+    if (isPlaying && currentStepIndex !== prevStepIndex) {
+      // 文字步骤 - 简化：只显示第一条文字
+      if (currentStep?.type === 'text') {
+        setCurrentTextIndex(0);
+        setShowText(true);
+        setShowHeart(false);
+        setHideTree(true);
+      }
+      // 爱心步骤
+      else if (currentStep?.type === 'heart') {
+        setShowText(false);
+        if (heartTimeoutRef.current) clearTimeout(heartTimeoutRef.current);
+        setShowHeart(true);
+        setHideTree(true);
+      }
+      // 其他步骤（intro/photo/tree）- 关闭特效
+      else {
+        setShowText(false);
+        setShowHeart(false);
+        if (currentStep?.type !== 'tree') {
+          setHideTree(currentStep?.type === 'intro' || currentStep?.type === 'photo');
+        } else {
+          setHideTree(false);
+        }
+      }
+    }
+    
+    // 停止播放时清理
+    if (!isPlaying && prevStepIndex >= 0) {
+      setShowText(false);
+      setShowHeart(false);
+      setHideTree(false);
+    }
+    
+    prevTimelineStepRef.current = isPlaying ? currentStepIndex : -1;
+  }, [timeline.state.isPlaying, timeline.state.currentStepIndex]);
 
   // 处理图片上传
   const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -279,40 +401,16 @@ export default function GrandTreeApp() {
           gestureActiveRef.current = false; // 效果结束，允许再次触发
         }, heartDuration);
         break;
-      case 'text':
-        if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
-        if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-        
-        // 获取文字列表
-        const texts = sceneConfig.gestureTexts || [sceneConfig.gestureText || 'MERRY CHRISTMAS'];
-        const switchInterval = (sceneConfig.textSwitchInterval || 3) * 1000;
-        
-        setCurrentTextIndex(0);
-        setShowText(true);
-        setShowHeart(false);
-        if (effectConfig.hideTree) setHideTree(true);
-        
-        // 如果有多条文字，启动轮播
-        if (texts.length > 1) {
-          let idx = 0;
-          textSwitchRef.current = setInterval(() => {
-            idx = (idx + 1) % texts.length;
-            setCurrentTextIndex(idx);
-          }, switchInterval);
-        }
-        
+      case 'text': {
         // 计算总时长：如果有多条文字，至少显示完一轮
+        const texts = configuredTextsRef.current;
+        const switchInterval = textSwitchIntervalRef.current;
         const totalDuration = texts.length > 1 
           ? Math.max(effectConfig.duration, texts.length * switchInterval)
           : effectConfig.duration;
-        
-        textTimeoutRef.current = setTimeout(() => {
-          setShowText(false);
-          if (effectConfig.hideTree) setHideTree(false);
-          if (textSwitchRef.current) clearInterval(textSwitchRef.current);
-          gestureActiveRef.current = false; // 效果结束，允许再次触发
-        }, totalDuration);
+        startTextEffect(totalDuration);
         break;
+      }
       case 'music':
         // 直接操作音频
         if (audioRef.current) {
@@ -342,7 +440,7 @@ export default function GrandTreeApp() {
       default:
         break;
     }
-  }, [sceneConfig, mobile, uploadedPhotos]);
+  }, [sceneConfig, uploadedPhotos, startTextEffect]);
 
   // 手动触发特效（按钮触发，支持切换开关）
   const triggerEffect = useCallback((effect: 'heart' | 'text') => {
@@ -354,19 +452,12 @@ export default function GrandTreeApp() {
       return;
     }
     if (effect === 'text' && showText) {
-      setShowText(false);
-      setHideTree(false);
-      if (textTimeoutRef.current) clearTimeout(textTimeoutRef.current);
-      if (textSwitchRef.current) clearInterval(textSwitchRef.current);
+      stopTextEffect();
       return;
     }
     // 否则触发特效
     executeGestureAction(effect);
-  }, [showHeart, showText, executeGestureAction]);
-
-  // 上一次触发的手势（防止重复触发）
-  const lastGestureRef = useRef<string>('');
-  const gestureActiveRef = useRef<boolean>(false);
+  }, [showHeart, showText, executeGestureAction, stopTextEffect]);
 
   // 处理手势变化
   const handleGestureChange = useCallback((gesture: string) => {
@@ -841,25 +932,6 @@ export default function GrandTreeApp() {
         duration={timeline.state.currentStep?.duration}
       />
 
-      {/* 时间轴模式 - CSS 文字特效（用于中文或指定CSS动画） */}
-      {(() => {
-        // 获取实际要显示的文字
-        const actualText = timeline.useConfiguredText 
-          ? configuredTexts[0] || 'MERRY CHRISTMAS'
-          : timeline.textContent || 'MERRY CHRISTMAS';
-        const shouldUseCSS = shouldUseCSSText(actualText, timeline.textAnimation);
-        
-        return (
-          <CSSTextEffect
-            text={actualText}
-            visible={timeline.showText && shouldUseCSS}
-            animation={timeline.textAnimation === 'particle' ? 'glow' : (timeline.textAnimation || 'glow')}
-            color={sceneConfig.textEffect?.color || '#FFD700'}
-            size={48}
-          />
-        );
-      })()}
-
       {/* 3D Canvas */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
@@ -884,15 +956,10 @@ export default function GrandTreeApp() {
             selectedPhotoIndex={selectedPhotoIndex}
             onPhotoSelect={setSelectedPhotoIndex}
             photoPaths={uploadedPhotos}
-            showHeart={showHeart || timeline.showHeart}
-            showText={showText || (timeline.showText && !shouldUseCSSText(
-              timeline.useConfiguredText ? configuredTexts[0] || '' : timeline.textContent,
-              timeline.textAnimation
-            ))}
-            customMessage={timeline.showText 
-              ? (timeline.useConfiguredText ? configuredTexts[0] || 'MERRY CHRISTMAS' : timeline.textContent || 'MERRY CHRISTMAS')
-              : (sceneConfig.gestureTexts || [sceneConfig.gestureText || 'MERRY CHRISTMAS'])[currentTextIndex] || 'MERRY CHRISTMAS'}
-            hideTree={hideTree || (timeline.state.isPlaying && !timeline.showTree)}
+            showHeart={showHeart}
+            showText={showText}
+            customMessage={(sceneConfig.gestureTexts || [sceneConfig.gestureText || 'MERRY CHRISTMAS'])[currentTextIndex] || 'MERRY CHRISTMAS'}
+            hideTree={hideTree}
             heartCount={sceneConfig.gestureEffect?.heartCount || 1500}
             textCount={sceneConfig.gestureEffect?.textCount || 1000}
             heartCenterPhoto={timeline.heartPhotoIndex !== null ? uploadedPhotos[timeline.heartPhotoIndex] : undefined}

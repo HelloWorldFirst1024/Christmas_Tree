@@ -38,6 +38,7 @@ interface ExperienceProps {
   heartCenterPhoto?: string; // 爱心特效中心显示的照片（单张）
   heartCenterPhotos?: string[]; // 爱心特效中心轮播的照片（多张）
   heartPhotoInterval?: number; // 照片轮播间隔（毫秒）
+  heartBottomText?: string; // 爱心特效底部文字
   palmMove?: { x: number; y: number }; // 手掌滑动控制视角
   zoomDelta?: number; // 缩放增量（大拇指控制）
 }
@@ -57,6 +58,7 @@ export const Experience = ({
   heartCenterPhoto,
   heartCenterPhotos,
   heartPhotoInterval = 3000,
+  heartBottomText,
   palmMove,
   zoomDelta = 0
 }: ExperienceProps) => {
@@ -318,6 +320,10 @@ export const Experience = ({
               color={config.fog?.color}
               treeHeight={config.treeShape?.height}
               treeRadius={config.treeShape?.radius}
+              count={config.fog?.count}
+              size={config.fog?.size}
+              spread={config.fog?.spread}
+              height={config.fog?.height}
             />
           )}
         </group>
@@ -341,6 +347,9 @@ export const Experience = ({
           count: config.heartEffect?.glowTrail?.count || 2,
           size: config.heartEffect?.glowTrail?.size || 1.5
         }}
+        bottomText={heartBottomText || config.heartEffect?.bottomText}
+        textColor={config.heartEffect?.bottomTextColor || '#FFD700'}
+        textSize={config.heartEffect?.bottomTextSize || 1}
       />
       <TextParticles 
         text={customMessage || 'MERRY CHRISTMAS'} 

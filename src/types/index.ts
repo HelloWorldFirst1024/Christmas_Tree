@@ -193,6 +193,9 @@ export interface SceneConfig {
       count?: number;         // 流光数量
       size?: number;          // 流光大小
     };
+    bottomText?: string;      // 爱心底部文字
+    bottomTextColor?: string; // 底部文字颜色
+    bottomTextSize?: number;  // 底部文字大小倍数
   };
   textEffect?: { color: string; size?: number };
   treeShape?: { height: number; radius: number };

@@ -1,16 +1,16 @@
 /**
  * 时间轴播放器 Hook
- * 管理故事线模式的播放逻辑
+ * 管理故事线模式的步骤播放逻辑
+ * 注意：文字/爱心特效的显示由外部 effect 监听 currentStep 来控制
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { TimelineConfig, TimelineStep, TextAnimationType } from '../types';
+import type { TimelineConfig, TimelineStep } from '../types';
 
 export interface TimelineState {
   isPlaying: boolean;
   currentStepIndex: number;
   currentStep: TimelineStep | null;
   progress: number; // 0-1 当前步骤进度
-  photoDisplayIndex: number; // 当前应该显示的照片索引（用于按顺序显示）
 }
 
 export interface TimelineActions {
@@ -25,19 +25,15 @@ export interface TimelineActions {
 export interface UseTimelineReturn {
   state: TimelineState;
   actions: TimelineActions;
-  // 当前应该显示的内容
+  // 当前应该显示的内容（仅用于 intro/photo/tree，文字和爱心由外部处理）
   showIntro: boolean;
   introText: string;
   introSubText?: string;
   showPhoto: boolean;
   photoIndex: number;
-  showHeart: boolean;
-  heartPhotoIndex: number | null; // 爱心中心的照片
-  showText: boolean;
-  textContent: string;
-  textAnimation?: TextAnimationType; // 文字动画类型
-  useConfiguredText?: boolean; // 是否使用已配置文字
   showTree: boolean;
+  // 爱心照片索引（外部 effect 使用）
+  heartPhotoIndex: number | null;
 }
 
 export function useTimeline(
@@ -45,19 +41,22 @@ export function useTimeline(
   totalPhotos: number,
   onComplete?: () => void,
   configuredTexts?: string[],
-  photoInterval: number = 3000 // 照片切换间隔，默认3秒
+  photoInterval: number = 3000,
+  textSwitchInterval: number = 3000
 ): UseTimelineReturn {
   const [state, setState] = useState<TimelineState>({
     isPlaying: false,
     currentStepIndex: -1,
     currentStep: null,
-    progress: 0,
-    photoDisplayIndex: 0
+    progress: 0
   });
 
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const photoCounterRef = useRef(0); // 用于按顺序显示照片
+  const photoCounterRef = useRef(0);
+  const configuredTextsRef = useRef(configuredTexts);
+  
+  configuredTextsRef.current = configuredTexts;
 
   // 清理定时器
   const clearTimers = useCallback(() => {
@@ -76,7 +75,6 @@ export function useTimeline(
     if (requestedIndex >= 0 && requestedIndex < totalPhotos) {
       return requestedIndex;
     }
-    // -1 表示按顺序自动选择
     const idx = photoCounterRef.current % Math.max(1, totalPhotos);
     photoCounterRef.current++;
     return idx;
@@ -84,62 +82,53 @@ export function useTimeline(
 
   // 计算步骤的实际持续时间
   const getStepDuration = useCallback((step: TimelineStep): number => {
-    // 如果是爱心步骤且显示照片，根据照片数量动态计算时间
     if (step.type === 'heart' && step.showPhoto && totalPhotos > 0) {
-      // 粒子聚合时间(约2秒) + 每张照片显示时间 + 滑动动画时间 + 最后一张额外显示时间
-      const gatherTime = 2000; // 粒子聚合时间
-      const slideTime = 600; // 每次滑动动画时间
-      const lastPhotoExtraTime = 1000; // 最后一张照片额外显示时间
-      
-      // 总时间 = 聚合时间 + (照片数量 * 每张显示时间) + ((照片数量-1) * 滑动时间) + 额外时间
+      const gatherTime = 2000;
+      const slideTime = 600;
+      const lastPhotoExtraTime = 1000;
       const calculatedDuration = gatherTime + 
         (totalPhotos * photoInterval) + 
         ((totalPhotos - 1) * slideTime) + 
         lastPhotoExtraTime;
-      
-      // 使用计算的时间，但至少要满足用户设置的 duration
       return Math.max(step.duration, calculatedDuration);
     }
     
+    const texts = configuredTextsRef.current;
+    if (step.type === 'text' && texts && texts.length > 1) {
+      // 文字步骤持续时间 = 文字数量 * 切换间隔
+      return texts.length * textSwitchInterval;
+    }
+    
     return step.duration;
-  }, [totalPhotos, photoInterval]);
+  }, [totalPhotos, photoInterval, textSwitchInterval]);
 
   // 播放指定步骤
   const playStep = useCallback((index: number) => {
-    // 预览时不检查 enabled，只检查步骤有效性
+    clearTimers();
+    
     if (!config?.steps || index < 0 || index >= config.steps.length) {
-      // 播放结束
-      setState(prev => ({
-        ...prev,
+      setState({
         isPlaying: false,
         currentStepIndex: -1,
         currentStep: null,
         progress: 0
-      }));
+      });
       onComplete?.();
       return;
     }
 
     const step = config.steps[index];
     const delay = step.delay || 0;
-    // 使用动态计算的持续时间
     const actualDuration = getStepDuration(step);
 
-    // 设置当前步骤
-    setState(prev => ({
-      ...prev,
+    setState({
       isPlaying: true,
       currentStepIndex: index,
       currentStep: step,
-      progress: 0,
-      photoDisplayIndex: step.type === 'photo' 
-        ? getPhotoIndex((step as { photoIndex: number }).photoIndex)
-        : prev.photoDisplayIndex
-    }));
+      progress: 0
+    });
 
-    // 延迟后开始
     timerRef.current = setTimeout(() => {
-      // 进度更新
       const startTime = Date.now();
       progressRef.current = setInterval(() => {
         const elapsed = Date.now() - startTime;
@@ -148,18 +137,12 @@ export function useTimeline(
         
         if (progress >= 1) {
           clearTimers();
-          // 自动播放下一步
           if (step.type === 'tree') {
-            // 圣诞树是结束标志
             if (config.loop) {
               photoCounterRef.current = 0;
               playStep(0);
             } else {
-              setState(prev => ({
-                ...prev,
-                isPlaying: false,
-                progress: 1
-              }));
+              setState(prev => ({ ...prev, isPlaying: false, progress: 1 }));
               onComplete?.();
             }
           } else {
@@ -168,14 +151,10 @@ export function useTimeline(
         }
       }, 50);
     }, delay);
-  }, [config, clearTimers, getPhotoIndex, getStepDuration, onComplete]);
+  }, [config, clearTimers, getStepDuration, onComplete]);
 
-  // 播放控制
   const play = useCallback(() => {
-    // 预览时不检查 enabled，只检查是否有步骤
     if (!config?.steps?.length) return;
-    
-    // 总是从头开始播放
     photoCounterRef.current = 0;
     playStep(0);
   }, [config, playStep]);
@@ -192,8 +171,7 @@ export function useTimeline(
       isPlaying: false,
       currentStepIndex: -1,
       currentStep: null,
-      progress: 0,
-      photoDisplayIndex: 0
+      progress: 0
     });
   }, [clearTimers]);
 
@@ -225,7 +203,6 @@ export function useTimeline(
     return clearTimers;
   }, [config?.enabled, config?.autoPlay]);
 
-  // 清理
   useEffect(() => {
     return clearTimers;
   }, [clearTimers]);
@@ -243,22 +220,11 @@ export function useTimeline(
     ? getPhotoIndex(currentStep.photoIndex) 
     : 0;
 
-  const showHeart = isPlaying && currentStep?.type === 'heart';
+  const showTree = isPlaying && currentStep?.type === 'tree';
+
   const heartPhotoIndex = currentStep?.type === 'heart' && currentStep.showPhoto
     ? getPhotoIndex(currentStep.photoIndex ?? -1)
     : null;
-
-  const showText = isPlaying && currentStep?.type === 'text';
-  // 如果使用已配置文字，则使用 configuredTexts，否则使用步骤中的 text
-  const textContent = currentStep?.type === 'text' 
-    ? (currentStep.useConfiguredText && configuredTexts?.length 
-        ? configuredTexts[0]  // 使用第一条配置文字
-        : currentStep.text)
-    : '';
-  const textAnimation = currentStep?.type === 'text' ? currentStep.animation : undefined;
-  const useConfiguredText = currentStep?.type === 'text' ? currentStep.useConfiguredText : false;
-
-  const showTree = isPlaying && currentStep?.type === 'tree';
 
   return {
     state,
@@ -268,12 +234,7 @@ export function useTimeline(
     introSubText,
     showPhoto,
     photoIndex,
-    showHeart,
-    heartPhotoIndex,
-    showText,
-    textContent,
-    textAnimation,
-    useConfiguredText,
-    showTree
+    showTree,
+    heartPhotoIndex
   };
 }

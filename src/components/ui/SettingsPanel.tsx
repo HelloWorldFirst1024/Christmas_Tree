@@ -423,7 +423,10 @@ export const SettingsPanel = ({
           config={config.timeline}
           onChange={(timeline) => onChange({ ...config, timeline })}
           photoCount={photoCount}
-          configuredTexts={config.gestureTexts || (config.gestureText ? [config.gestureText] : [])}
+          configuredTexts={config.gestureTexts || (config.gestureText ? [config.gestureText] : ['MERRY CHRISTMAS'])}
+          textSwitchInterval={config.textSwitchInterval || 3}
+          onTextsChange={(texts) => onChange({ ...config, gestureTexts: texts, gestureText: texts[0] })}
+          onTextIntervalChange={(interval) => onChange({ ...config, textSwitchInterval: interval })}
           onPreview={onTimelinePreview}
           isPlaying={isTimelinePlaying}
         />
@@ -1633,8 +1636,16 @@ export const SettingsPanel = ({
           <span>显示雾气</span>
           <input type="checkbox" checked={safeConfig.fog.enabled} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, enabled: e.target.checked } })} style={{ accentColor: '#FFD700' }} />
         </div>
-        <div style={labelStyle}><span>浓度: {safeConfig.fog.opacity.toFixed(1)}</span></div>
-        <input type="range" min="0.1" max="0.8" step="0.05" value={safeConfig.fog.opacity} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, opacity: Number(e.target.value) } })} style={sliderStyle} />
+        <div style={labelStyle}><span>粒子数量: {safeConfig.fog.count || 800}</span></div>
+        <input type="range" min="200" max="2000" step="100" value={safeConfig.fog.count || 800} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, count: Number(e.target.value) } })} style={sliderStyle} />
+        <div style={labelStyle}><span>粒子大小: {(safeConfig.fog.size || 0.8).toFixed(1)}</span></div>
+        <input type="range" min="0.2" max="2" step="0.1" value={safeConfig.fog.size || 0.8} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, size: Number(e.target.value) } })} style={sliderStyle} />
+        <div style={labelStyle}><span>范围: {(safeConfig.fog.spread || 1).toFixed(1)}</span></div>
+        <input type="range" min="0.5" max="2" step="0.1" value={safeConfig.fog.spread || 1} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, spread: Number(e.target.value) } })} style={sliderStyle} />
+        <div style={labelStyle}><span>高度: {(safeConfig.fog.height || 1.5).toFixed(1)}</span></div>
+        <input type="range" min="0.5" max="4" step="0.5" value={safeConfig.fog.height || 1.5} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, height: Number(e.target.value) } })} style={sliderStyle} />
+        <div style={labelStyle}><span>透明度: {safeConfig.fog.opacity.toFixed(1)}</span></div>
+        <input type="range" min="0.1" max="1" step="0.05" value={safeConfig.fog.opacity} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, opacity: Number(e.target.value) } })} style={sliderStyle} />
         <div style={{ marginTop: '8px' }}>
           <span style={{ fontSize: '10px', color: '#888' }}>雾气颜色</span>
           <input
@@ -2007,6 +2018,71 @@ export const SettingsPanel = ({
             </>
           )}
         </div>
+        
+        {/* 底部文字配置 */}
+        <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+          <span style={{ fontSize: '11px', color: '#FFD700', fontWeight: 'bold' }}>✨ 底部文字</span>
+          <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 8px 0' }}>
+            在爱心下方显示粒子文字效果（支持中文）
+          </p>
+          
+          <input
+            type="text"
+            value={config.heartEffect?.bottomText || ''}
+            onChange={e => onChange({ 
+              ...config, 
+              heartEffect: { 
+                ...config.heartEffect, 
+                color: config.heartEffect?.color || '#FF1493',
+                bottomText: e.target.value 
+              } 
+            })}
+            placeholder="输入底部文字（如：我爱你）"
+            style={inputStyle}
+          />
+          
+          {config.heartEffect?.bottomText && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '8px' }}>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#888' }}>文字颜色</span>
+                  <input
+                    type="color"
+                    value={config.heartEffect?.bottomTextColor || '#FFD700'}
+                    onChange={e => onChange({ 
+                      ...config, 
+                      heartEffect: { 
+                        ...config.heartEffect, 
+                        color: config.heartEffect?.color || '#FF1493',
+                        bottomTextColor: e.target.value 
+                      } 
+                    })}
+                    style={{ width: '100%', height: '28px', cursor: 'pointer', border: 'none', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <span style={{ fontSize: '10px', color: '#888' }}>文字大小: {(config.heartEffect?.bottomTextSize || 1).toFixed(1)}x</span>
+                  <input
+                    type="range"
+                    min="0.5"
+                    max="2"
+                    step="0.1"
+                    value={config.heartEffect?.bottomTextSize || 1}
+                    onChange={e => onChange({ 
+                      ...config, 
+                      heartEffect: { 
+                        ...config.heartEffect, 
+                        color: config.heartEffect?.color || '#FF1493',
+                        bottomTextSize: Number(e.target.value) 
+                      } 
+                    })}
+                    style={sliderStyle}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+        </div>
       </CollapsibleSection>
       
       {/* 文字特效 */}
@@ -2225,105 +2301,9 @@ export const SettingsPanel = ({
             </div>
           ))}
           
-          {/* 文字粒子内容 - 多条轮播 */}
+          {/* 分享时先显示文字 */}
           <div style={{ marginTop: '12px', width: '100%', boxSizing: 'border-box' }}>
-            <div style={{ ...labelStyle, marginBottom: '8px', flexWrap: 'wrap', gap: '4px' }}>
-              <span style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}><Type size={12} /> 文字粒子内容</span>
-              <button
-                onClick={() => {
-                  const texts = config.gestureTexts || [config.gestureText || 'MERRY CHRISTMAS'];
-                  onChange({ ...config, gestureTexts: [...texts, 'NEW TEXT'] });
-                }}
-                style={{
-                  background: 'rgba(255,215,0,0.2)',
-                  border: '1px solid rgba(255,215,0,0.5)',
-                  color: '#FFD700',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '11px',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '2px',
-                  flexShrink: 0
-                }}
-              >
-                + 添加
-              </button>
-            </div>
-            
-            {(config.gestureTexts || [config.gestureText || 'MERRY CHRISTMAS']).map((text, idx) => (
-              <div key={idx} style={{ display: 'flex', gap: '4px', marginBottom: '6px', alignItems: 'center', width: '100%', boxSizing: 'border-box' }}>
-                <span style={{ color: '#888', fontSize: '10px', width: '16px', flexShrink: 0 }}>{idx + 1}.</span>
-                <input
-                  type="text"
-                  value={text}
-                  onChange={e => {
-                    const texts = [...(config.gestureTexts || [config.gestureText || 'MERRY CHRISTMAS'])];
-                    texts[idx] = e.target.value;
-                    onChange({ ...config, gestureTexts: texts, gestureText: texts[0] });
-                  }}
-                  placeholder="输入文字"
-                  maxLength={20}
-                  style={{
-                    flex: 1,
-                    minWidth: 0, // 关键：允许 flex 子元素收缩
-                    padding: '6px 8px',
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,215,0,0.3)',
-                    borderRadius: '4px',
-                    color: '#fff',
-                    fontSize: '11px',
-                    boxSizing: 'border-box'
-                  }}
-                />
-                {(config.gestureTexts?.length || 1) > 1 && (
-                  <button
-                    onClick={() => {
-                      const texts = [...(config.gestureTexts || [])];
-                      texts.splice(idx, 1);
-                      onChange({ ...config, gestureTexts: texts, gestureText: texts[0] });
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: '#ff6666',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      fontSize: '14px',
-                      flexShrink: 0
-                    }}
-                  >
-                    <X size={14} />
-                  </button>
-                )}
-              </div>
-            ))}
-            
-            {/* 切换间隔 */}
-            {(config.gestureTexts?.length || 1) > 1 && (
-              <div style={{ marginTop: '8px' }}>
-                <div style={labelStyle}>
-                  <span>切换间隔: {config.textSwitchInterval || 3}秒</span>
-                </div>
-                <input
-                  type="range"
-                  min="1"
-                  max="10"
-                  step="0.5"
-                  value={config.textSwitchInterval || 3}
-                  onChange={e => onChange({ ...config, textSwitchInterval: Number(e.target.value) })}
-                  style={sliderStyle}
-                />
-              </div>
-            )}
-            
-            <p style={{ fontSize: '9px', color: '#666', margin: '6px 0 0 0' }}>
-              支持英文大小写字母、数字 0-9、空格和 ! · 剪刀手触发
-            </p>
-            
-            {/* 分享时先显示文字 */}
-            <div style={{ ...labelStyle, marginTop: '12px', paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+            <div style={{ ...labelStyle, paddingTop: '10px', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
               <span>分享链接先显示文字</span>
               <input
                 type="checkbox"

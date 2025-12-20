@@ -52,13 +52,28 @@ const generateTextPositionsFromCanvas = (
   }
   
   // 根据文字长度和设备调整字体大小
-  const fontSize = isMobile ? 60 : 100;
+  const baseFontSize = isMobile ? 80 : 120;
   const fontFamily = '"Microsoft YaHei", "PingFang SC", "Hiragino Sans GB", sans-serif';
   
   // 先测量文字宽度
-  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  ctx.font = `bold ${baseFontSize}px ${fontFamily}`;
   const metrics = ctx.measureText(text);
-  const textWidth = metrics.width;
+  const rawTextWidth = metrics.width;
+  
+  // 计算屏幕可用宽度（Canvas 像素宽度限制）
+  const maxCanvasWidth = isMobile ? 400 : 700;
+  
+  // 如果文字太长，缩小字体
+  let fontSize = baseFontSize;
+  if (rawTextWidth > maxCanvasWidth) {
+    fontSize = Math.floor(baseFontSize * maxCanvasWidth / rawTextWidth);
+    fontSize = Math.max(fontSize, isMobile ? 30 : 40); // 最小字体
+  }
+  
+  // 重新测量
+  ctx.font = `bold ${fontSize}px ${fontFamily}`;
+  const finalMetrics = ctx.measureText(text);
+  const textWidth = finalMetrics.width;
   const textHeight = fontSize * 1.2;
   
   // 设置 Canvas 大小（留边距）
@@ -83,6 +98,9 @@ const generateTextPositionsFromCanvas = (
   const basePositions: { x: number; y: number }[] = [];
   const sampleStep = isMobile ? 3 : 2; // 采样步长，移动端稀疏一些
   
+  // 3D 空间缩放系数 - 固定值，不随字体大小变化
+  const spaceScale = scale * 0.1;
+  
   for (let y = 0; y < canvas.height; y += sampleStep) {
     for (let x = 0; x < canvas.width; x += sampleStep) {
       const idx = (y * canvas.width + x) * 4;
@@ -91,8 +109,8 @@ const generateTextPositionsFromCanvas = (
       // 只取不透明的像素
       if (alpha > 128) {
         // 转换为 3D 坐标（居中，Y 轴翻转）
-        const posX = (x - canvas.width / 2) * scale * 0.1;
-        const posY = (canvas.height / 2 - y) * scale * 0.1;
+        const posX = (x - canvas.width / 2) * spaceScale;
+        const posY = (canvas.height / 2 - y) * spaceScale;
         basePositions.push({ x: posX, y: posY });
       }
     }
@@ -132,6 +150,7 @@ export const TextParticles = ({ text, visible, color = '#FFD700', size = 1 }: Te
   const materialRef = useRef<THREE.PointsMaterial>(null);
   const initializedRef = useRef(false);
   const lastTextRef = useRef(text);
+  const lastVisibleRef = useRef(visible);
   const { camera } = useThree();
   
   const count = 2000; // 粒子数量（增加以支持中文）
@@ -158,21 +177,37 @@ export const TextParticles = ({ text, visible, color = '#FFD700', size = 1 }: Te
   // 目标位置 ref（用于平滑过渡）
   const targetPositionsRef = useRef<Float32Array>(new Float32Array(count * 3));
   
-  // 初始化目标位置
+  // 初始化目标位置（只在组件挂载时执行一次）
   useEffect(() => {
     const scale = mobile ? 0.6 : 1.0;
     targetPositionsRef.current = generateTextPositionsFromCanvas(text, scale, particleSeeds, mobile);
     lastTextRef.current = text;
-  }, []);
+  }, [particleSeeds, mobile]);
   
-  // 文字变化时只更新目标位置（当前位置保持不变，会平滑过渡）
+  // 文字变化时更新目标位置 - 只在文字真正变化时才更新
   useEffect(() => {
+    // 严格比较：只有当文字真正不同时才更新
     if (text !== lastTextRef.current) {
+      console.log('[TextParticles] Text changed:', lastTextRef.current, '->', text);
       const scale = mobile ? 0.6 : 1.0;
       targetPositionsRef.current = generateTextPositionsFromCanvas(text, scale, particleSeeds, mobile);
       lastTextRef.current = text;
     }
   }, [text, particleSeeds, mobile]);
+  
+  // 当 visible 从 false 变为 true 时，确保使用最新的文字
+  useEffect(() => {
+    if (visible && !lastVisibleRef.current) {
+      // 刚变为可见，检查文字是否需要更新
+      if (text !== lastTextRef.current) {
+        console.log('[TextParticles] Became visible with new text:', text);
+        const scale = mobile ? 0.6 : 1.0;
+        targetPositionsRef.current = generateTextPositionsFromCanvas(text, scale, particleSeeds, mobile);
+        lastTextRef.current = text;
+      }
+    }
+    lastVisibleRef.current = visible;
+  }, [visible, text, particleSeeds, mobile]);
   
   useFrame((state, delta) => {
     if (!pointsRef.current || !groupRef.current) return;
@@ -204,22 +239,25 @@ export const TextParticles = ({ text, visible, color = '#FFD700', size = 1 }: Te
     const time = state.clock.elapsedTime;
     const targets = targetPositionsRef.current;
     
-    // 平滑过渡速度
-    const speed = 2.5;
+    // 平滑过渡速度 - 加快以减少卡顿感
+    const speed = 5.0;
     
     for (let i = 0; i < count; i++) {
       const i3 = i * 3;
       
-      // 始终向目标位置移动
-      posArray[i3] += (targets[i3] - posArray[i3]) * delta * speed;
-      posArray[i3 + 1] += (targets[i3 + 1] - posArray[i3 + 1]) * delta * speed;
-      posArray[i3 + 2] += (targets[i3 + 2] - posArray[i3 + 2]) * delta * speed;
+      // 计算浮动偏移（基于时间的周期性偏移，不累加）
+      const floatX = visible ? Math.sin(time * 1.5 + randoms[i] * 10) * 0.02 : 0;
+      const floatY = visible ? Math.cos(time * 1.5 + randoms[i] * 10) * 0.02 : 0;
       
-      if (visible) {
-        // 轻微浮动效果
-        posArray[i3] += Math.sin(time * 1.5 + randoms[i] * 10) * 0.003;
-        posArray[i3 + 1] += Math.cos(time * 1.5 + randoms[i] * 10) * 0.003;
-      }
+      // 目标位置 = 基础目标 + 浮动偏移
+      const targetX = targets[i3] + floatX;
+      const targetY = targets[i3 + 1] + floatY;
+      const targetZ = targets[i3 + 2];
+      
+      // 向目标位置平滑移动
+      posArray[i3] += (targetX - posArray[i3]) * delta * speed;
+      posArray[i3 + 1] += (targetY - posArray[i3 + 1]) * delta * speed;
+      posArray[i3 + 2] += (targetZ - posArray[i3 + 2]) * delta * speed;
     }
     
     posAttr.needsUpdate = true;
@@ -235,7 +273,8 @@ export const TextParticles = ({ text, visible, color = '#FFD700', size = 1 }: Te
   const initPositions = useMemo(() => {
     const scale = mobile ? 0.6 : 1.0;
     return generateTextPositionsFromCanvas(text, scale, particleSeeds, mobile);
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [particleSeeds, mobile]);
   
   return (
     <group ref={groupRef}>

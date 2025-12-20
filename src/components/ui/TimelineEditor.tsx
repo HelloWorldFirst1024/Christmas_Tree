@@ -22,20 +22,6 @@ const STEP_TYPES: { type: TimelineStepType; label: string; icon: React.ReactNode
   { type: 'tree', label: '圣诞树', icon: <TreePine size={14} />, color: '#4CAF50' },
 ];
 
-// 文字动画选项
-const TEXT_ANIMATIONS = [
-  { id: 'auto', label: '自动（英文粒子/中文发光）' },
-  { id: 'particle', label: '✨ 粒子效果（仅英文）' },
-  { id: 'glow', label: '💫 发光脉冲' },
-  { id: 'sparkle', label: '⭐ 闪烁星光' },
-  { id: 'wave', label: '🌊 波浪' },
-  { id: 'bounce', label: '🎾 弹跳' },
-  { id: 'gradient', label: '🌈 渐变流动' },
-  { id: 'neon', label: '💡 霓虹灯' },
-  { id: 'typewriter', label: '⌨️ 打字机' },
-  { id: 'fadeIn', label: '🌅 淡入' },
-];
-
 // 创建默认步骤
 const createDefaultStep = (type: TimelineStepType): TimelineStep => {
   const base = { id: generateId(), duration: 3000, delay: 0 };
@@ -59,6 +45,9 @@ interface TimelineEditorProps {
   onChange: (config: TimelineConfig) => void;
   photoCount: number;
   configuredTexts?: string[];  // 已配置的文字粒子内容
+  textSwitchInterval?: number; // 文字切换间隔（秒）
+  onTextsChange?: (texts: string[]) => void; // 修改文字内容
+  onTextIntervalChange?: (interval: number) => void; // 修改切换间隔
   onPreview?: () => void;
   isPlaying?: boolean;
 }
@@ -68,6 +57,9 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
   onChange,
   photoCount,
   configuredTexts = [],
+  textSwitchInterval = 3,
+  onTextsChange,
+  onTextIntervalChange,
   onPreview,
   isPlaying = false
 }) => {
@@ -403,55 +395,36 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
 
                       {step.type === 'text' && (
                         <div>
-                          {/* 使用已配置文字选项 */}
-                          {configuredTexts.length > 0 && (
-                            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', marginBottom: '8px' }}>
-                              <input
-                                type="checkbox"
-                                checked={step.useConfiguredText ?? false}
-                                onChange={e => updateStep(step.id, { useConfiguredText: e.target.checked })}
-                                style={{ accentColor: '#FF9800' }}
-                              />
-                              使用已配置的文字粒子内容
-                            </label>
-                          )}
-                          
-                          {step.useConfiguredText && configuredTexts.length > 0 ? (
-                            <div style={{ padding: '8px', background: 'rgba(255,152,0,0.1)', borderRadius: '4px', fontSize: '11px' }}>
-                              <p style={{ margin: '0 0 4px 0', color: '#FF9800' }}>将使用以下已配置文字：</p>
-                              {configuredTexts.map((t, i) => (
-                                <div key={i} style={{ color: '#ccc', padding: '2px 0' }}>• {t}</div>
-                              ))}
-                            </div>
-                          ) : (
-                            <>
-                              <label style={{ fontSize: '10px', color: '#888' }}>显示文字</label>
+                          {/* 文字粒子内容编辑 - 简化版：只显示第一条文字 */}
+                          {onTextsChange && (
+                            <div style={{ marginBottom: '10px' }}>
+                              <div style={{ marginBottom: '6px' }}>
+                                <span style={{ fontSize: '10px', color: '#888' }}>文字粒子内容</span>
+                              </div>
+                              
                               <input
                                 type="text"
-                                value={step.text}
-                                onChange={e => updateStep(step.id, { text: e.target.value })}
-                                placeholder="圣诞快乐 / MERRY CHRISTMAS"
-                                maxLength={30}
-                                style={{ ...inputStyle, marginTop: '4px' }}
+                                value={configuredTexts[0] || ''}
+                                onChange={e => {
+                                  const newTexts = [...configuredTexts];
+                                  newTexts[0] = e.target.value;
+                                  onTextsChange(newTexts);
+                                }}
+                                placeholder="输入文字"
+                                maxLength={20}
+                                style={{
+                                  width: '100%',
+                                  padding: '6px 8px',
+                                  background: 'rgba(255,255,255,0.1)',
+                                  border: '1px solid rgba(255,152,0,0.3)',
+                                  borderRadius: '4px',
+                                  color: '#fff',
+                                  fontSize: '12px',
+                                  boxSizing: 'border-box'
+                                }}
                               />
-                            </>
+                            </div>
                           )}
-                          
-                          <label style={{ fontSize: '10px', color: '#888', marginTop: '8px', display: 'block' }}>
-                            动画效果
-                          </label>
-                          <select
-                            value={step.animation || 'auto'}
-                            onChange={e => updateStep(step.id, { animation: e.target.value === 'auto' ? undefined : e.target.value as never })}
-                            style={{ ...inputStyle, marginTop: '4px' }}
-                          >
-                            {TEXT_ANIMATIONS.map(a => (
-                              <option key={a.id} value={a.id}>{a.label}</option>
-                            ))}
-                          </select>
-                          <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
-                            粒子效果仅支持英文，中文会自动使用CSS动画
-                          </p>
                         </div>
                       )}
 
