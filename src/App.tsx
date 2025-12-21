@@ -817,8 +817,8 @@ export default function GrandTreeApp() {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
         return;
       }
-      // 如果有弹窗打开，不触发
-      if (showSettings || modalVisible || showTutorial || showPrivacy || showKeyboardHelp) {
+      // 如果有弹窗打开或处于演示模式，不触发（演示模式有自己的快捷键处理）
+      if (showSettings || modalVisible || showTutorial || showPrivacy || showKeyboardHelp || showPhotoManager || demoMode) {
         return;
       }
       
@@ -857,7 +857,7 @@ export default function GrandTreeApp() {
     
     document.addEventListener('keydown', handleGlobalKeyDown);
     return () => document.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [mobile, showSettings, modalVisible, showTutorial, showPrivacy, showKeyboardHelp, toggleMusic, triggerEffect]);
+  }, [mobile, showSettings, modalVisible, showTutorial, showPrivacy, showKeyboardHelp, showPhotoManager, demoMode, toggleMusic, triggerEffect]);
 
   // 加载本地保存的照片（配置已在 useState 初始化时加载）
   useEffect(() => {
