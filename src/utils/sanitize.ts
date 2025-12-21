@@ -577,9 +577,14 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
       steps: []
     };
     
+    // 时间轴专用音乐
+    if (typeof t.music === 'string') {
+      timeline.music = sanitizeText(t.music, 50);
+    }
+    
     // 验证步骤数组
     if (Array.isArray(t.steps)) {
-      const allowedTypes = ['intro', 'photo', 'heart', 'text', 'tree'];
+      const allowedTypes = ['intro', 'photo', 'heart', 'text', 'tree', 'gift', 'voice'];
       const validSteps = t.steps
         .slice(0, 20) // 最多20个步骤
         .filter((step): step is Record<string, unknown> => 
@@ -591,7 +596,7 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
           const base = {
             id: typeof step.id === 'string' ? step.id.slice(0, 20) : Math.random().toString(36).substr(2, 9),
             type: step.type as string,
-            duration: sanitizeNumber(step.duration, 1000, 30000, 3000),
+            duration: sanitizeNumber(step.duration, 1000, 60000, 3000),
             delay: sanitizeNumber(step.delay, 0, 10000, 0)
           };
           
@@ -613,11 +618,47 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
                 showPhoto: sanitizeBoolean(step.showPhoto, false),
                 photoIndex: sanitizeNumber(step.photoIndex, -1, 100, -1)
               };
-            case 'text':
-              return {
+            case 'text': {
+              const textStep: Record<string, unknown> = {
                 ...base,
-                text: sanitizeText(step.text, 50) || 'MERRY CHRISTMAS'
+                text: sanitizeText(step.text, 50) || 'MERRY CHRISTMAS',
+                useConfiguredText: sanitizeBoolean(step.useConfiguredText, false)
               };
+              // 动画类型验证
+              const allowedAnimations = ['particle', 'fadeIn', 'typewriter', 'glow', 'sparkle', 'wave', 'bounce', 'gradient', 'neon'];
+              if (typeof step.animation === 'string' && allowedAnimations.includes(step.animation)) {
+                textStep.animation = step.animation;
+              }
+              return textStep;
+            }
+            case 'gift': {
+              const giftStep: Record<string, unknown> = {
+                ...base,
+                message: sanitizeText(step.message, 200) || '祝你圣诞快乐！',
+                messageDuration: sanitizeNumber(step.messageDuration, 1000, 10000, 3000)
+              };
+              if (typeof step.boxColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(step.boxColor)) {
+                giftStep.boxColor = step.boxColor;
+              }
+              if (typeof step.ribbonColor === 'string' && /^#[0-9A-Fa-f]{6}$/.test(step.ribbonColor)) {
+                giftStep.ribbonColor = step.ribbonColor;
+              }
+              return giftStep;
+            }
+            case 'voice': {
+              const voiceStep: Record<string, unknown> = {
+                ...base,
+                showIndicator: sanitizeBoolean(step.showIndicator, true)
+              };
+              // audioUrl 由服务端处理，audioData 在分享时提取
+              if (typeof step.audioUrl === 'string' && step.audioUrl.startsWith('voice:')) {
+                voiceStep.audioUrl = step.audioUrl;
+              }
+              if (typeof step.audioData === 'string' && step.audioData.startsWith('data:audio/')) {
+                voiceStep.audioData = step.audioData;
+              }
+              return voiceStep;
+            }
             case 'tree':
               return base;
             default:
@@ -629,6 +670,86 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
     }
     
     sanitized.timeline = timeline;
+  }
+  
+  // 3D 铃铛装饰配置
+  if (cfg.bells && typeof cfg.bells === 'object') {
+    const b = cfg.bells as Record<string, unknown>;
+    const bells: Record<string, unknown> = {
+      enabled: sanitizeBoolean(b.enabled, false),
+      count: sanitizeNumber(b.count, 5, 20, 10),
+      size: sanitizeNumber(b.size, 0.5, 2, 1),
+      swingAmplitude: sanitizeNumber(b.swingAmplitude, 0.1, 0.5, 0.2),
+      swingSpeed: sanitizeNumber(b.swingSpeed, 0.5, 2, 1)
+    };
+    if (typeof b.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(b.color)) {
+      bells.color = b.color;
+    }
+    sanitized.bells = bells;
+  }
+  
+  // 流星效果配置
+  if (cfg.shootingStars && typeof cfg.shootingStars === 'object') {
+    const ss = cfg.shootingStars as Record<string, unknown>;
+    const shootingStars: Record<string, unknown> = {
+      enabled: sanitizeBoolean(ss.enabled, false),
+      speed: sanitizeNumber(ss.speed, 1, 5, 2),
+      trailLength: sanitizeNumber(ss.trailLength, 0.5, 2, 1),
+      glowIntensity: sanitizeNumber(ss.glowIntensity, 0.5, 2, 1)
+    };
+    // 频率范围验证
+    if (Array.isArray(ss.frequency) && ss.frequency.length === 2) {
+      const min = sanitizeNumber(ss.frequency[0], 1, 30, 3);
+      const max = sanitizeNumber(ss.frequency[1], 1, 30, 8);
+      shootingStars.frequency = [Math.min(min, max), Math.max(min, max)];
+    }
+    if (typeof ss.color === 'string' && /^#[0-9A-Fa-f]{6}$/.test(ss.color)) {
+      shootingStars.color = ss.color;
+    }
+    sanitized.shootingStars = shootingStars;
+  }
+  
+  // 极光背景配置
+  if (cfg.aurora && typeof cfg.aurora === 'object') {
+    const au = cfg.aurora as Record<string, unknown>;
+    const aurora: Record<string, unknown> = {
+      enabled: sanitizeBoolean(au.enabled, false),
+      intensity: sanitizeNumber(au.intensity, 0.3, 1, 0.6),
+      waveSpeed: sanitizeNumber(au.waveSpeed, 0.5, 2, 1),
+      coverage: sanitizeNumber(au.coverage, 0.3, 1, 0.6)
+    };
+    // 颜色数组验证
+    if (Array.isArray(au.colors) && au.colors.length === 3) {
+      const validColors = au.colors
+        .filter((c): c is string => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c));
+      if (validColors.length === 3) {
+        aurora.colors = validColors;
+      }
+    }
+    sanitized.aurora = aurora;
+  }
+  
+  // 烟花效果配置
+  if (cfg.fireworks && typeof cfg.fireworks === 'object') {
+    const fw = cfg.fireworks as Record<string, unknown>;
+    const fireworks: Record<string, unknown> = {
+      enabled: sanitizeBoolean(fw.enabled, false),
+      explosionSize: sanitizeNumber(fw.explosionSize, 5, 20, 10),
+      particleCount: sanitizeNumber(fw.particleCount, 50, 200, 100),
+      gravity: sanitizeNumber(fw.gravity, 0.5, 2, 1),
+      fadeSpeed: sanitizeNumber(fw.fadeSpeed, 0.5, 2, 1),
+      maxConcurrent: sanitizeNumber(fw.maxConcurrent, 1, 5, 3)
+    };
+    // 颜色数组验证
+    if (Array.isArray(fw.colors)) {
+      const validColors = fw.colors
+        .slice(0, 10)
+        .filter((c): c is string => typeof c === 'string' && /^#[0-9A-Fa-f]{6}$/.test(c));
+      if (validColors.length > 0) {
+        fireworks.colors = validColors;
+      }
+    }
+    sanitized.fireworks = fireworks;
   }
   
   return sanitized;
