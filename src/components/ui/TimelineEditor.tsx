@@ -196,8 +196,7 @@ const PhotoSelector: React.FC<PhotoSelectorProps> = ({
                 alt={`照片 ${photoIndex + 1}`}
                 style={{
                   maxWidth: '100%',
-                  maxHeight: 'calc(100vh - 140px)',
-                  maxHeight: 'calc(100dvh - 140px)',
+                  maxHeight: 'min(calc(100vh - 140px), calc(100dvh - 140px))',
                   width: 'auto',
                   height: 'auto',
                   objectFit: 'contain',
