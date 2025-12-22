@@ -376,18 +376,26 @@ export default function GrandTreeApp() {
     const fileArray = Array.from(files);
     console.log(`选择了 ${fileArray.length} 个文件`);
     
-    // 并行处理所有图片
-    const promises = fileArray
-      .filter(file => file.type.startsWith('image/'))
-      .map(async (file) => {
-        try {
-          const base64 = await fileToBase64(file);
-          return base64;
-        } catch (err) {
-          console.error('Failed to convert image:', err);
-          return null;
-        }
-      });
+    const errors: string[] = [];
+    
+    // 并行处理所有图片（fileToBase64 内部已包含校验）
+    const promises = fileArray.map(async (file) => {
+      // 先检查 MIME 类型
+      if (!file.type.startsWith('image/')) {
+        errors.push(`「${file.name}」不是图片文件`);
+        return null;
+      }
+      
+      try {
+        const base64 = await fileToBase64(file);
+        return base64;
+      } catch (err) {
+        const errorMsg = err instanceof Error ? err.message : '未知错误';
+        errors.push(`「${file.name}」: ${errorMsg}`);
+        console.error('Failed to convert image:', file.name, err);
+        return null;
+      }
+    });
     
     const results = await Promise.all(promises);
     const newPhotos = results.filter((p): p is string => p !== null);
@@ -399,11 +407,19 @@ export default function GrandTreeApp() {
       setRefreshKey(k => k + 1);
     }
     
+    // 显示错误提示
+    if (errors.length > 0) {
+      const errorText = errors.length === 1 
+        ? errors[0] 
+        : `${errors.length} 个文件无法加载:\n${errors.slice(0, 3).join('\n')}${errors.length > 3 ? '\n...' : ''}`;
+      showModal('error', '部分图片加载失败', errorText);
+    }
+    
     // 重置 input，确保下次可以选择相同文件
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
-  }, []);
+  }, [showModal]);
 
   // 应用预设主题（深度合并，不覆盖照片等用户数据）
   const applyTheme = useCallback((theme: ThemeKey) => {

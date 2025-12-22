@@ -217,8 +217,96 @@ export const getTreePosition = (
   return [r * Math.cos(theta), y, r * Math.sin(theta)];
 };
 
-// 图片转 base64
-export const fileToBase64 = (file: File): Promise<string> => {
+// 支持的图片 MIME 类型
+const VALID_IMAGE_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/bmp',
+  'image/svg+xml'
+];
+
+// 图片文件头魔数（用于二进制校验）
+const IMAGE_SIGNATURES: { type: string; signature: number[] }[] = [
+  { type: 'image/jpeg', signature: [0xFF, 0xD8, 0xFF] },
+  { type: 'image/png', signature: [0x89, 0x50, 0x4E, 0x47] },
+  { type: 'image/gif', signature: [0x47, 0x49, 0x46, 0x38] },
+  { type: 'image/webp', signature: [0x52, 0x49, 0x46, 0x46] }, // RIFF header
+  { type: 'image/bmp', signature: [0x42, 0x4D] },
+];
+
+/**
+ * 校验文件是否为有效图片
+ * 1. 检查 MIME 类型
+ * 2. 检查文件头魔数
+ * 3. 尝试加载为 Image 对象验证可渲染性
+ */
+export const validateImageFile = (file: File): Promise<{ valid: boolean; error?: string }> => {
+  return new Promise((resolve) => {
+    // 1. 检查 MIME 类型
+    if (!VALID_IMAGE_TYPES.includes(file.type)) {
+      resolve({ valid: false, error: `不支持的文件类型: ${file.type || '未知'}` });
+      return;
+    }
+
+    // 2. 读取文件头进行二进制校验
+    const reader = new FileReader();
+    reader.onload = () => {
+      const arr = new Uint8Array(reader.result as ArrayBuffer);
+      
+      // 检查文件头魔数
+      const isValidSignature = IMAGE_SIGNATURES.some(({ signature }) => {
+        return signature.every((byte, i) => arr[i] === byte);
+      });
+
+      // SVG 是文本格式，跳过魔数检查
+      if (!isValidSignature && file.type !== 'image/svg+xml') {
+        resolve({ valid: false, error: '文件内容与图片格式不匹配' });
+        return;
+      }
+
+      // 3. 尝试加载为 Image 验证可渲染性
+      const blob = new Blob([arr], { type: file.type });
+      const url = URL.createObjectURL(blob);
+      const img = new Image();
+      
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        if (img.width > 0 && img.height > 0) {
+          resolve({ valid: true });
+        } else {
+          resolve({ valid: false, error: '图片尺寸无效' });
+        }
+      };
+      
+      img.onerror = () => {
+        URL.revokeObjectURL(url);
+        resolve({ valid: false, error: '无法加载图片，文件可能已损坏' });
+      };
+      
+      img.src = url;
+    };
+
+    reader.onerror = () => {
+      resolve({ valid: false, error: '读取文件失败' });
+    };
+
+    // 只读取前 16 字节用于魔数检查
+    reader.readAsArrayBuffer(file.slice(0, 16));
+  });
+};
+
+// 图片转 base64（带校验）
+export const fileToBase64 = async (file: File, skipValidation = false): Promise<string> => {
+  // 先校验图片有效性
+  if (!skipValidation) {
+    const validation = await validateImageFile(file);
+    if (!validation.valid) {
+      throw new Error(validation.error || '无效的图片文件');
+    }
+  }
+
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
