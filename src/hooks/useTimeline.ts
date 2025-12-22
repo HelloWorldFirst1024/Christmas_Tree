@@ -4,7 +4,7 @@
  * 注意：文字/爱心特效的显示由外部 effect 监听 currentStep 来控制
  */
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { TimelineConfig, TimelineStep, GiftStep, VoiceStep } from '../types';
+import type { TimelineConfig, TimelineStep, GiftStep, VoiceStep, LetterStep } from '../types';
 
 export interface TimelineState {
   isPlaying: boolean;
@@ -54,6 +54,15 @@ export interface UseTimelineReturn {
     showIndicator?: boolean;
   } | null;
   onVoiceComplete: () => void;
+  // 书信步骤状态
+  showLetter: boolean;
+  letterConfig: {
+    content: string;
+    speed?: number;
+    fontSize?: number;
+    color?: string;
+  } | null;
+  onLetterComplete: () => void;
 }
 
 export function useTimeline(
@@ -120,6 +129,16 @@ export function useTimeline(
       }
     }
     
+    // 书信步骤：根据字数自动计算持续时间
+    if (step.type === 'letter') {
+      const letterStep = step as LetterStep;
+      const content = letterStep.content || '';
+      const speed = letterStep.speed || 100;
+      // 字数 * 速度 + 额外缓冲时间
+      const calculatedDuration = content.length * speed + 2000;
+      return Math.max(step.duration, calculatedDuration);
+    }
+    
     // 文字步骤：直接使用用户设置的 duration
     // 不再根据文字数量自动计算，让用户完全控制持续时间
     return step.duration;
@@ -166,6 +185,14 @@ export function useTimeline(
     if (step.type === 'voice') {
       timerRef.current = setTimeout(() => {
         // 语音步骤不自动进度，等待 onVoiceComplete 回调
+      }, delay);
+      return;
+    }
+
+    // 书信步骤：等待逐字显示完成
+    if (step.type === 'letter') {
+      timerRef.current = setTimeout(() => {
+        // 书信步骤不自动进度，等待 onLetterComplete 回调
       }, delay);
       return;
     }
@@ -258,6 +285,14 @@ export function useTimeline(
     }
   }, [config, state.currentStepIndex, playStep]);
 
+  // 书信显示完成回调
+  const onLetterComplete = useCallback(() => {
+    // 进入下一步
+    if (config?.steps && state.currentStepIndex >= 0) {
+      playStep(state.currentStepIndex + 1);
+    }
+  }, [config, state.currentStepIndex, playStep]);
+
   // 自动播放
   useEffect(() => {
     if (config?.enabled && config.autoPlay && config.steps?.length) {
@@ -311,6 +346,17 @@ export function useTimeline(
       }
     : null;
 
+  // 书信步骤状态
+  const showLetter = isPlaying && currentStep?.type === 'letter';
+  const letterConfig = currentStep?.type === 'letter'
+    ? {
+        content: (currentStep as LetterStep).content,
+        speed: (currentStep as LetterStep).speed,
+        fontSize: (currentStep as LetterStep).fontSize,
+        color: (currentStep as LetterStep).color
+      }
+    : null;
+
   return {
     state,
     actions: { play, pause, stop, next, prev, goTo },
@@ -331,6 +377,10 @@ export function useTimeline(
     // 语音步骤
     showVoice,
     voiceConfig,
-    onVoiceComplete
+    onVoiceComplete,
+    // 书信步骤
+    showLetter,
+    letterConfig,
+    onLetterComplete
   };
 }

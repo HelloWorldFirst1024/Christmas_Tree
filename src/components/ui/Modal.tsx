@@ -77,7 +77,26 @@ export const Modal: React.FC<ModalProps> = ({
         )}
 
         {/* 消息 */}
-        {message && <div style={messageStyle}>{message}</div>}
+        {message && (
+          <div style={messageStyle}>
+            {message.split(/(https?:\/\/[^\s\)]+)/g).map((part, i) => {
+              if (part.match(/^https?:\/\//)) {
+                return (
+                  <a
+                    key={i}
+                    href={part}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: '#9EFFE0', textDecoration: 'underline' }}
+                  >
+                    {part}
+                  </a>
+                );
+              }
+              return <span key={i}>{part}</span>;
+            })}
+          </div>
+        )}
 
         {/* 分享链接 */}
         {shareUrl && (

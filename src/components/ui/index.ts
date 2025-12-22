@@ -18,3 +18,4 @@ export { VoicePlayer } from './VoicePlayer';
 export { VisualEnhancementsSettings } from './VisualEnhancementsSettings';
 export { KeyboardShortcuts } from './KeyboardShortcuts';
 export { PhotoManager } from './PhotoManager';
+export { LetterStepOverlay } from './LetterStepOverlay';

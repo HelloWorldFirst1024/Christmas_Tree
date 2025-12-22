@@ -340,7 +340,8 @@ export type TimelineStepType =
   | 'text'       // 文字特效
   | 'tree'       // 圣诞树聚合（结束）
   | 'gift'       // 礼物拆开（等待点击）
-  | 'voice';     // 语音祝福
+  | 'voice'      // 语音祝福
+  | 'letter';    // 书信模式
 
 // 时间轴步骤基础接口
 export interface TimelineStepBase {
@@ -412,8 +413,17 @@ export interface VoiceStep extends TimelineStepBase {
   showIndicator?: boolean;    // 是否显示播放指示器
 }
 
+// 书信步骤
+export interface LetterStep extends TimelineStepBase {
+  type: 'letter';
+  content: string;           // 书信内容（支持多行）
+  speed?: number;            // 打字速度（毫秒/字），默认 100
+  fontSize?: number;        // 字体大小，默认 24
+  color?: string;           // 文字颜色，默认 '#FFD700'
+}
+
 // 时间轴步骤联合类型
-export type TimelineStep = IntroStep | PhotoStep | HeartStep | TextStep | TreeStep | GiftStep | VoiceStep;
+export type TimelineStep = IntroStep | PhotoStep | HeartStep | TextStep | TreeStep | GiftStep | VoiceStep | LetterStep;
 
 // 时间轴配置
 export interface TimelineConfig {

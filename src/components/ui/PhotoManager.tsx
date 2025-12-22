@@ -65,7 +65,7 @@ export const PhotoManager: React.FC<PhotoManagerProps> = ({
         const file = files[i];
         const fileSizeMB = file.size / (1024 * 1024);
         if (currentSize + fileSizeMB > MAX_PHOTO_MB) {
-          setSizeError(`已达到 ${currentSize.toFixed(1)} MB，添加「${file.name}」会超过 ${MAX_PHOTO_MB} MB 限制，请删除部分照片或压缩后再试。`);
+          setSizeError(`已达到 ${currentSize.toFixed(1)} MB，添加「${file.name}」会超过 ${MAX_PHOTO_MB} MB 限制。请删除部分照片或使用图片压缩工具（如 https://imagestool.com/zh_CN/compress-images）压缩后再试。`);
           break;
         }
         const base64 = await fileToBase64(files[i]);
@@ -402,10 +402,28 @@ export const PhotoManager: React.FC<PhotoManagerProps> = ({
                 margin: '6px 0 0',
                 fontSize: '11px',
                 color: '#ff7777',
-                textAlign: 'center'
+                textAlign: 'center',
+                lineHeight: '1.5'
               }}
             >
-              {sizeError}
+              {sizeError.split('（如 ').map((part, i) => {
+                if (i === 0) return part;
+                const [link, rest] = part.split('）');
+                return (
+                  <React.Fragment key={i}>
+                    （如{' '}
+                    <a
+                      href="https://imagestool.com/zh_CN/compress-images"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{ color: '#9EFFE0', textDecoration: 'underline' }}
+                    >
+                      {link}
+                    </a>
+                    ）{rest}
+                  </React.Fragment>
+                );
+              })}
             </p>
           )}
         </div>

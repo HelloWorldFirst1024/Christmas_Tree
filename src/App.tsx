@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { Canvas } from '@react-three/fiber';
 import * as THREE from 'three';
-import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, photoScreenPositions, GiftStepOverlay, VoicePlayer, KeyboardShortcuts, PhotoManager } from './components';
+import { Experience, GestureController, SettingsPanel, TitleOverlay, Modal, LyricsDisplay, AvatarCropper, IntroOverlay, WelcomeTutorial, PrivacyNotice, CenterPhoto, photoScreenPositions, GiftStepOverlay, VoicePlayer, KeyboardShortcuts, PhotoManager, LetterStepOverlay } from './components';
 import { CHRISTMAS_MUSIC_URL } from './config';
 import { THEME_PRESETS, type ThemeKey } from './config/themes';
 import { isMobile, isTablet, fileToBase64, getDefaultSceneConfig, toggleFullscreen, isFullscreen, isFullscreenSupported } from './utils/helpers';
@@ -46,8 +46,9 @@ export default function GrandTreeApp() {
   // 场景状态
   const [sceneState, setSceneState] = useState<SceneState>('CHAOS');
   const [rotationSpeed, setRotationSpeed] = useState(0);
-  const [palmMove, setPalmMove] = useState<{ x: number; y: number } | undefined>(undefined);
   const [zoomDelta, setZoomDelta] = useState<number>(0);
+  // 使用 ref 存储手掌移动值，避免频繁状态更新导致卡顿
+  const palmMoveRef = useRef<{ x: number; y: number } | null>(null);
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [debugMode, setDebugMode] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -77,6 +78,18 @@ export default function GrandTreeApp() {
   // 时间轴完成回调
   const handleTimelineComplete = useCallback(() => {
     setSceneState('FORMED');
+  }, []);
+
+  // 显示弹窗（提前声明，供 handleFileUpload 使用）
+  const showModal = useCallback((
+    type: 'alert' | 'confirm' | 'share' | 'error',
+    title: string,
+    message?: string
+  ) => {
+    setModalType(type);
+    setModalTitle(title);
+    setModalMessage(message || '');
+    setModalVisible(true);
   }, []);
 
   // 教程状态 - 首次访问显示
@@ -616,9 +629,8 @@ export default function GrandTreeApp() {
   const handlePalmMove = useCallback((deltaX: number, deltaY: number) => {
     // 照片锁定期间禁止相机移动
     if (photoLocked) return;
-    setPalmMove({ x: deltaX, y: deltaY });
-    // 短暂后清除，让下一帧可以继续接收新的移动
-    setTimeout(() => setPalmMove(undefined), 50);
+    // 直接更新 ref，避免触发 React 重新渲染
+    palmMoveRef.current = { x: deltaX, y: deltaY };
   }, [photoLocked]);
 
   // 处理手势缩放
@@ -835,17 +847,6 @@ export default function GrandTreeApp() {
     onRefresh?: () => void;
   } | undefined>(undefined);
 
-  // 显示弹窗
-  const showModal = useCallback((
-    type: 'alert' | 'confirm' | 'share' | 'error',
-    title: string,
-    message?: string
-  ) => {
-    setModalType(type);
-    setModalTitle(title);
-    setModalMessage(message || '');
-    setModalVisible(true);
-  }, []);
 
   // 通用快捷键（非演示模式也可用，仅电脑版）
   useEffect(() => {
@@ -1123,6 +1124,16 @@ export default function GrandTreeApp() {
         onComplete={timeline.onVoiceComplete}
       />
 
+      {/* 时间轴模式 - 书信步骤 */}
+      <LetterStepOverlay
+        visible={timeline.showLetter}
+        content={timeline.letterConfig?.content || ''}
+        speed={timeline.letterConfig?.speed}
+        fontSize={timeline.letterConfig?.fontSize}
+        color={timeline.letterConfig?.color}
+        onComplete={timeline.onLetterComplete}
+      />
+
       {/* 3D Canvas */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
@@ -1141,7 +1152,7 @@ export default function GrandTreeApp() {
           <Experience
             sceneState={timeline.showTree ? 'FORMED' : sceneState}
             rotationSpeed={rotationSpeed}
-            palmMove={palmMove}
+            palmMoveRef={palmMoveRef}
             zoomDelta={zoomDelta}
             config={sceneConfig}
             selectedPhotoIndex={selectedPhotoIndex}
@@ -1181,6 +1192,7 @@ export default function GrandTreeApp() {
         onPalmMove={handlePalmMove}
         onZoom={handleZoom}
       />
+
 
       {/* 设置面板 */}
       {!isShareMode && showSettings && (
@@ -1260,7 +1272,7 @@ export default function GrandTreeApp() {
           <>
             <button onClick={() => setShowPhotoManager(true)} style={buttonStyle(false, mobile)}><Camera size={18} /></button>
             <button onClick={() => setShowSettings(!showSettings)} style={buttonStyle(showSettings, mobile)}><Settings size={18} /></button>
-            <button onClick={() => setDebugMode(!debugMode)} style={buttonStyle(debugMode, mobile)}>
+            <button onClick={() => setDebugMode(!debugMode)} style={buttonStyle(debugMode, mobile)} title="调试模式（显示摄像头）">
               <Wrench size={18} />
             </button>
             <button onClick={handleShare} disabled={isSharing} style={buttonStyle(isSharing, mobile)}>

@@ -44,7 +44,7 @@ interface ExperienceProps {
   heartCenterPhotos?: string[]; // 爱心特效中心轮播的照片（多张）
   heartPhotoInterval?: number; // 照片轮播间隔（毫秒）
   heartBottomText?: string; // 爱心特效底部文字
-  palmMove?: { x: number; y: number }; // 手掌滑动控制视角
+  palmMoveRef?: React.MutableRefObject<{ x: number; y: number } | null>; // 手掌滑动控制视角（使用 ref 避免频繁更新）
   zoomDelta?: number; // 手势缩放控制
   onHeartPaused?: (paused: boolean) => void; // 爱心特效暂停状态回调
   fireworkTrigger?: boolean; // 烟花触发信号
@@ -77,7 +77,7 @@ export const Experience = ({
   heartCenterPhotos,
   heartPhotoInterval = 3000,
   heartBottomText,
-  palmMove,
+  palmMoveRef,
   zoomDelta,
   onHeartPaused,
   fireworkTrigger,
@@ -97,6 +97,8 @@ export const Experience = ({
   // 记录上一帧的相机角度，用于检测视角移动
   const lastAzimuthRef = useRef<number>(0);
   const lastPolarRef = useRef<number>(0);
+  // 标记是否需要取消选中照片（避免在 useFrame 中直接调用 setState）
+  const shouldDeselectPhotoRef = useRef<boolean>(false);
   // 资源加载完成标记
   const notifyAssetsReady = useRef(() => {
     if (!assetsReadyRef.current) {
@@ -117,6 +119,18 @@ export const Experience = ({
     const timer = setTimeout(() => notifyAssetsReady(), 3000);
     return () => clearTimeout(timer);
   }, [notifyAssetsReady]);
+
+  // 处理照片取消选中（在 useEffect 中处理，避免在渲染期间调用 setState）
+  useEffect(() => {
+    if (shouldDeselectPhotoRef.current && selectedPhotoIndex !== null) {
+      shouldDeselectPhotoRef.current = false;
+      // 使用 setTimeout 确保在下一个事件循环中执行，避免在渲染期间调用
+      const timer = setTimeout(() => {
+        onPhotoSelect(null);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+  });
 
   // 确保 config 有新字段的默认值
   const safeConfig = {
@@ -145,9 +159,12 @@ export const Experience = ({
       const azimuthDelta = Math.abs(currentAzimuth - lastAzimuthRef.current);
       const polarDelta = Math.abs(currentPolar - lastPolarRef.current);
       
-      // 如果视角移动超过阈值，取消选中照片
+      // 如果视角移动超过阈值，取消选中照片（使用 ref 标记，在 useEffect 中处理）
       if (selectedPhotoIndex !== null && (azimuthDelta > 0.02 || polarDelta > 0.02)) {
-        onPhotoSelect(null);
+        // 使用 ref 标记需要取消选中，避免在渲染期间调用 setState
+        if (!shouldDeselectPhotoRef.current) {
+          shouldDeselectPhotoRef.current = true;
+        }
       }
       
       // 更新上一帧的角度
@@ -168,8 +185,11 @@ export const Experience = ({
         prevSceneStateRef.current = sceneState;
       }
       
+      // 读取手掌移动值（使用 ref 避免频繁状态更新）
+      const currentPalmMove = palmMoveRef?.current;
+      
       // 聚合时平滑过渡到正对视角（没有选中照片时）
-      if (isFormed && !palmMove && selectedPhotoIndex === null) {
+      if (isFormed && !currentPalmMove && selectedPhotoIndex === null) {
         const targetPolar = Math.PI / 2.2; // 稍微俯视的角度
         const polarDiff = targetPolar - currentPolar;
         if (Math.abs(polarDiff) > 0.01) {
@@ -177,16 +197,28 @@ export const Experience = ({
         }
       }
       
-      // 手掌滑动控制视角
-      if (palmMove && (Math.abs(palmMove.x) > 0.001 || Math.abs(palmMove.y) > 0.001)) {
-        controlsRef.current.setAzimuthalAngle(currentAzimuth + palmMove.x);
+      // 手掌滑动控制视角（添加平滑插值减少卡顿）
+      if (currentPalmMove && (Math.abs(currentPalmMove.x) > 0.001 || Math.abs(currentPalmMove.y) > 0.001)) {
+        // 使用平滑插值，减少卡顿感
+        const smoothFactor = 0.15; // 平滑系数（0-1，值越小越平滑）
+        const targetAzimuth = currentAzimuth + currentPalmMove.x;
+        const smoothAzimuth = currentAzimuth + (targetAzimuth - currentAzimuth) * smoothFactor;
+        controlsRef.current.setAzimuthalAngle(smoothAzimuth);
+        
         // 散开时不限制极角，聚合时限制
         if (isChaos) {
-          const newPolar = Math.max(0.1, Math.min(Math.PI - 0.1, currentPolar + palmMove.y));
-          controlsRef.current.setPolarAngle(newPolar);
+          const targetPolar = Math.max(0.1, Math.min(Math.PI - 0.1, currentPolar + currentPalmMove.y));
+          const smoothPolar = currentPolar + (targetPolar - currentPolar) * smoothFactor;
+          controlsRef.current.setPolarAngle(smoothPolar);
         } else {
-          const newPolar = Math.max(Math.PI / 4, Math.min(Math.PI / 1.8, currentPolar + palmMove.y));
-          controlsRef.current.setPolarAngle(newPolar);
+          const targetPolar = Math.max(Math.PI / 4, Math.min(Math.PI / 1.8, currentPolar + currentPalmMove.y));
+          const smoothPolar = currentPolar + (targetPolar - currentPolar) * smoothFactor;
+          controlsRef.current.setPolarAngle(smoothPolar);
+        }
+        
+        // 清除移动值，准备接收下一帧的数据
+        if (palmMoveRef?.current) {
+          palmMoveRef.current = null;
         }
       } else if (selectedPhotoIndex === null) {
         // 没有手掌控制且没有选中照片时使用自动旋转

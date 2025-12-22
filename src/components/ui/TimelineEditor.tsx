@@ -4,11 +4,11 @@
  */
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { TimelineConfig, TimelineStep, TimelineStepType, GiftStep, VoiceStep } from '../../types';
+import type { TimelineConfig, TimelineStep, TimelineStepType, GiftStep, VoiceStep, LetterStep } from '../../types';
 import { PRESET_MUSIC } from '../../types';
 import { 
   Play, Pause, Trash2, GripVertical, ChevronUp, ChevronDown,
-  MessageSquare, Image, Heart, Type, TreePine, Music, Gift, Mic, Upload, X, Eye
+  MessageSquare, Image, Heart, Type, TreePine, Music, Gift, Mic, Upload, X, Eye, FileText
 } from 'lucide-react';
 import { VoiceRecorder } from './VoiceRecorder';
 import { validateAudioFile } from '../../utils/audioValidation';
@@ -25,6 +25,7 @@ const STEP_TYPES: { type: TimelineStepType; label: string; icon: React.ReactNode
   { type: 'text', label: '文字特效', icon: <Type size={14} />, color: '#FF9800' },
   { type: 'gift', label: '礼物拆开', icon: <Gift size={14} />, color: '#FF5722' },
   { type: 'voice', label: '语音祝福', icon: <Mic size={14} />, color: '#00BCD4' },
+  { type: 'letter', label: '书信模式', icon: <FileText size={14} />, color: '#FFD700' },
   { type: 'tree', label: '圣诞树', icon: <TreePine size={14} />, color: '#4CAF50' },
 ];
 
@@ -45,6 +46,8 @@ const createDefaultStep = (type: TimelineStepType): TimelineStep => {
       return { ...base, type: 'gift', duration: 0, message: '圣诞快乐！', boxColor: '#E53935', ribbonColor: '#FFD700', messageDuration: 3000 };
     case 'voice':
       return { ...base, type: 'voice', duration: 0, showIndicator: true };
+    case 'letter':
+      return { ...base, type: 'letter', content: '亲爱的你，\n\n这是一封来自圣诞节的祝福...', speed: 100, fontSize: 24, color: '#FFD700' };
     case 'tree':
       return { ...base, type: 'tree', duration: 2000 };
   }
@@ -454,6 +457,271 @@ const VoiceStepEditor: React.FC<VoiceStepEditorProps> = ({ step, onUpdate }) => 
         />
         播放时显示音频指示器
       </label>
+    </div>
+  );
+};
+
+// 书信步骤编辑器子组件
+interface LetterStepEditorProps {
+  step: LetterStep;
+  onUpdate: (updates: Partial<LetterStep>) => void;
+}
+
+const LetterStepEditor: React.FC<LetterStepEditorProps> = ({ step, onUpdate }) => {
+  const [showEditor, setShowEditor] = useState(false);
+  const [tempContent, setTempContent] = useState(step.content || '');
+
+  const handleSave = () => {
+    onUpdate({ content: tempContent });
+    setShowEditor(false);
+  };
+
+  const handleCancel = () => {
+    setTempContent(step.content || '');
+    setShowEditor(false);
+  };
+
+  // 计算预计显示时长（根据字数）
+  const estimatedDuration = Math.max(3000, (tempContent.length * (step.speed || 100)) + 2000);
+
+  return (
+    <div>
+      <p style={{ fontSize: '10px', color: '#888', margin: '0 0 8px 0' }}>
+        书信模式会逐字显示内容，像手写一样
+      </p>
+
+      {/* 当前内容预览 */}
+      <div style={{ marginBottom: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+          <span style={{ fontSize: '11px', color: '#FFD700' }}>
+            {step.content ? `✓ 已编辑 (${step.content.length} 字)` : '未编辑'}
+          </span>
+          <button
+            onClick={() => {
+              setTempContent(step.content || '');
+              setShowEditor(true);
+            }}
+            style={{
+              padding: '6px 12px',
+              background: 'rgba(255,215,0,0.2)',
+              border: '1px solid rgba(255,215,0,0.4)',
+              borderRadius: '4px',
+              color: '#FFD700',
+              fontSize: '11px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }}
+          >
+            <FileText size={12} /> {step.content ? '编辑' : '编写'}
+          </button>
+        </div>
+        {step.content && (
+          <div style={{
+            padding: '8px',
+            background: 'rgba(255,255,255,0.05)',
+            borderRadius: '4px',
+            fontSize: '11px',
+            color: '#ccc',
+            maxHeight: '80px',
+            overflow: 'auto',
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word'
+          }}>
+            {step.content.slice(0, 100)}{step.content.length > 100 ? '...' : ''}
+          </div>
+        )}
+      </div>
+
+      {/* 配置选项 */}
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '8px' }}>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '10px', color: '#888' }}>
+            打字速度: {step.speed || 100}ms/字
+          </label>
+          <input
+            type="range"
+            min="50"
+            max="300"
+            step="10"
+            value={step.speed || 100}
+            onChange={e => onUpdate({ speed: Number(e.target.value) })}
+            style={{ width: '100%', accentColor: '#FFD700' }}
+          />
+        </div>
+        <div style={{ flex: 1 }}>
+          <label style={{ fontSize: '10px', color: '#888' }}>
+            字体大小: {step.fontSize || 24}px
+          </label>
+          <input
+            type="range"
+            min="16"
+            max="48"
+            step="2"
+            value={step.fontSize || 24}
+            onChange={e => onUpdate({ fontSize: Number(e.target.value) })}
+            style={{ width: '100%', accentColor: '#FFD700' }}
+          />
+        </div>
+      </div>
+      <div style={{ marginBottom: '8px' }}>
+        <label style={{ fontSize: '10px', color: '#888' }}>文字颜色</label>
+        <input
+          type="color"
+          value={step.color || '#FFD700'}
+          onChange={e => onUpdate({ color: e.target.value })}
+          style={{ width: '100%', height: '30px', marginTop: '4px', cursor: 'pointer' }}
+        />
+      </div>
+      <div style={{ fontSize: '9px', color: '#666', marginTop: '4px' }}>
+        预计显示时长: {(estimatedDuration / 1000).toFixed(1)} 秒
+      </div>
+
+      {/* 编辑弹窗 */}
+      {showEditor && createPortal(
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.9)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          padding: '20px',
+          boxSizing: 'border-box'
+        }}
+        onClick={handleCancel}
+        >
+          <div style={{
+            position: 'relative',
+            maxWidth: '800px',
+            width: '100%',
+            maxHeight: '90vh',
+            background: 'rgba(20, 20, 20, 0.98)',
+            border: '2px solid rgba(255, 215, 0, 0.3)',
+            borderRadius: '12px',
+            padding: '24px',
+            boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            flexDirection: 'column'
+          }}
+          onClick={e => e.stopPropagation()}
+          >
+            {/* 关闭按钮 */}
+            <button
+              onClick={handleCancel}
+              style={{
+                position: 'absolute',
+                top: '12px',
+                right: '12px',
+                background: 'rgba(255,255,255,0.1)',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#fff'
+              }}
+            >
+              <X size={18} />
+            </button>
+
+            {/* 标题 */}
+            <h3 style={{
+              color: '#FFD700',
+              fontSize: '18px',
+              margin: '0 0 16px 0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}>
+              <FileText size={20} /> 编写书信内容
+            </h3>
+
+            {/* 输入框 */}
+            <textarea
+              value={tempContent}
+              onChange={e => setTempContent(e.target.value)}
+              placeholder="在这里输入书信内容，支持多行...&#10;&#10;例如：&#10;亲爱的你，&#10;&#10;这是一封来自圣诞节的祝福..."
+              style={{
+                flex: 1,
+                minHeight: '400px',
+                padding: '16px',
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,215,0,0.3)',
+                borderRadius: '8px',
+                color: '#fff',
+                fontSize: '16px',
+                fontFamily: 'sans-serif',
+                lineHeight: '1.8',
+                resize: 'vertical',
+                outline: 'none',
+                boxSizing: 'border-box'
+              }}
+              maxLength={5000}
+            />
+
+            {/* 字数统计 */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginTop: '12px',
+              fontSize: '12px',
+              color: '#888'
+            }}>
+              <span>{tempContent.length} / 5000 字</span>
+              <span>预计显示时长: {(estimatedDuration / 1000).toFixed(1)} 秒</span>
+            </div>
+
+            {/* 按钮 */}
+            <div style={{
+              display: 'flex',
+              gap: '12px',
+              marginTop: '16px',
+              justifyContent: 'flex-end'
+            }}>
+              <button
+                onClick={handleCancel}
+                style={{
+                  padding: '10px 20px',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  borderRadius: '6px',
+                  color: '#fff',
+                  fontSize: '14px',
+                  cursor: 'pointer'
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSave}
+                style={{
+                  padding: '10px 20px',
+                  background: '#FFD700',
+                  border: '1px solid #FFD700',
+                  borderRadius: '6px',
+                  color: '#000',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: 'bold'
+                }}
+              >
+                保存
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
     </div>
   );
 };
@@ -910,6 +1178,14 @@ export const TimelineEditor: React.FC<TimelineEditorProps> = ({
                       {step.type === 'voice' && (
                         <VoiceStepEditor
                           step={step as VoiceStep}
+                          onUpdate={(updates) => updateStep(step.id, updates)}
+                        />
+                      )}
+
+                      {/* 书信步骤配置 */}
+                      {step.type === 'letter' && (
+                        <LetterStepEditor
+                          step={step as LetterStep}
                           onUpdate={(updates) => updateStep(step.id, updates)}
                         />
                       )}
