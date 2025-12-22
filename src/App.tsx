@@ -627,7 +627,7 @@ export default function GrandTreeApp() {
         }
         photoLockTimerRef.current = setTimeout(() => {
           setPhotoLocked(false);
-        }, 900);
+        }, 1000); // 锁定1秒
       }
     }
   }, [selectedPhotoIndex, showHeart, photoLocked]);
@@ -1204,9 +1204,12 @@ export default function GrandTreeApp() {
         debugMode={debugMode}
         enabled={aiEnabled}
         isPhotoSelected={selectedPhotoIndex !== null}
+        photoLocked={photoLocked}
         onPinch={handlePinch}
         onPalmMove={handlePalmMove}
         onZoom={handleZoom} // 现在这个调用不会触发 App 重渲染，只会更新 zoomRef
+        palmSpeed={sceneConfig.cameraSensitivity || 25}
+        zoomSpeed={sceneConfig.zoomSpeed || 100}
       />
 
 

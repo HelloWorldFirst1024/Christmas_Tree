@@ -1,3 +1,4 @@
+
 // 场景状态类型
 export type SceneState = 'CHAOS' | 'FORMED';
 
@@ -309,6 +310,8 @@ export interface SceneConfig {
   preloadText?: boolean;   // 分享链接打开时先显示文字效果（时间轴模式下忽略）
   timeline?: TimelineConfig; // 时间轴/故事线配置
   themeLabel?: string;     // 当前主题标签（自定义或预设名称）
+  cameraSensitivity?: number; // 视角移动灵敏度
+  zoomSpeed?: number;      // 放大缩小速度
 }
 
 // 照片屏幕位置

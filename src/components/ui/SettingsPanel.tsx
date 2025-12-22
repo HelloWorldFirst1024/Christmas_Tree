@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import type { SceneConfig, GestureConfig, GestureAction, MusicConfig, AnimationEasing, ScatterShape, GatherShape, DecorationColors, DecorationStyle, DecorationMaterial } from '../../types';
@@ -429,7 +430,8 @@ export const SettingsPanel = ({
     ribbons: config.ribbons || { enabled: true, count: 50 },
     fog: config.fog || { enabled: true, opacity: 0.3 },
     gestures: config.gestures || defaultGestures,
-    music: config.music || defaultMusic
+    music: config.music || defaultMusic,
+    cameraSensitivity: config.cameraSensitivity || 25
   };
 
   // 主题合并（深度合并，不影响照片/时间轴等数据）
@@ -1119,7 +1121,7 @@ export const SettingsPanel = ({
               </div>
             ))}
           </div>
-          {/* 颜色预览 */}
+          {/* 预览颜色 */}
           <div style={{ 
             marginTop: '6px', 
             display: 'flex', 
@@ -2256,7 +2258,7 @@ export const SettingsPanel = ({
         <div style={labelStyle}><span>范围: {(safeConfig.fog.spread || 1).toFixed(1)}</span></div>
         <input type="range" min="0.5" max="2" step="0.1" value={safeConfig.fog.spread || 1} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, spread: Number(e.target.value) } })} style={sliderStyle} />
         <div style={labelStyle}><span>高度: {(safeConfig.fog.height || 1.5).toFixed(1)}</span></div>
-        <input type="range" min="0.5" max="4" step="0.5" value={safeConfig.fog.height || 1.5} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, height: Number(e.target.value) } })} style={sliderStyle} />
+        <input type="range" min="0.5" max="4" step="0.5" value={config.fog?.height || 1.5} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, height: Number(e.target.value) } })} style={sliderStyle} />
         <div style={labelStyle}><span>透明度: {safeConfig.fog.opacity.toFixed(1)}</span></div>
         <input type="range" min="0.1" max="1" step="0.05" value={safeConfig.fog.opacity} onChange={e => onChange({ ...config, fog: { ...safeConfig.fog, opacity: Number(e.target.value) } })} style={sliderStyle} />
         <div style={{ marginTop: '8px' }}>
@@ -2959,14 +2961,51 @@ export const SettingsPanel = ({
           <span>启用 AI</span>
           <input type="checkbox" checked={aiEnabled} onChange={e => onAiToggle(e.target.checked)} style={{ accentColor: '#FFD700' }} />
         </div>
-        <p style={{ fontSize: '10px', color: '#666', margin: '4px 0 0 0' }}>
+        
+        {aiEnabled && (
+          <>
+            <div style={{ ...labelStyle, marginTop: '8px' }}>
+              <span>视角控制速度: {safeConfig.cameraSensitivity}</span>
+            </div>
+            <input
+              type="range"
+              min="5"
+              max="200"
+              step="5"
+              value={safeConfig.cameraSensitivity}
+              onChange={e => onChange({ ...config, cameraSensitivity: Number(e.target.value) })}
+              style={sliderStyle}
+            />
+            <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
+              调节手掌张开时旋转视角的灵敏度（数值越大转动越快，最高200）
+            </p>
+            
+            <div style={{ ...labelStyle, marginTop: '12px' }}>
+              <span>放大缩小速度: {safeConfig.zoomSpeed || 100}</span>
+            </div>
+            <input
+              type="range"
+              min="10"
+              max="200"
+              step="10"
+              value={safeConfig.zoomSpeed || 100}
+              onChange={e => onChange({ ...config, zoomSpeed: Number(e.target.value) })}
+              style={sliderStyle}
+            />
+            <p style={{ fontSize: '9px', color: '#666', margin: '4px 0 0 0' }}>
+              调节五指张开时放大缩小的速度（数值越大缩放越快，最高200）
+            </p>
+          </>
+        )}
+        
+        <p style={{ fontSize: '10px', color: '#666', margin: '12px 0 0 0' }}>
           {isMobile() ? '移动端建议关闭以提升性能' : '需要摄像头权限，用手势控制树'}
         </p>
       </CollapsibleSection>
 
       {/* 手势配置 */}
       {aiEnabled && (
-        <CollapsibleSection title="手势配置" icon={<Hand size={14} />}>
+        <CollapsibleSection title="手势映射" icon={<Hand size={14} />}>
           <p style={{ fontSize: '10px', color: '#888', margin: '0 0 10px 0' }}>
             自定义每个手势对应的功能
           </p>

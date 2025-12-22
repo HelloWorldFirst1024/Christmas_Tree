@@ -1,3 +1,4 @@
+
 /**
  * 安全验证和清理工具
  * 防止 XSS 攻击和恶意内容注入
@@ -778,6 +779,16 @@ export const sanitizeShareConfig = (config: unknown): Record<string, unknown> =>
       }
     }
     sanitized.fireworks = fireworks;
+  }
+  
+  // 视角移动灵敏度
+  if (cfg.cameraSensitivity !== undefined) {
+    sanitized.cameraSensitivity = sanitizeNumber(cfg.cameraSensitivity, 5, 200, 25);
+  }
+  
+  // 放大缩小速度
+  if (cfg.zoomSpeed !== undefined) {
+    sanitized.zoomSpeed = sanitizeNumber(cfg.zoomSpeed, 10, 200, 100);
   }
   
   return sanitized;

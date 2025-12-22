@@ -62,6 +62,7 @@ export default function SharePage({ shareId }: SharePageProps) {
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [musicPlaying, setMusicPlaying] = useState(true);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [photoLocked, setPhotoLocked] = useState(false); // 照片选中后的锁定期
 
   // 手势效果状态
   const [showHeart, setShowHeart] = useState(false);
@@ -91,6 +92,7 @@ export default function SharePage({ shareId }: SharePageProps) {
   const heartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textEffectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const textSwitchTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const photoLockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // 配置 refs（避免 useCallback 依赖变化导致重新创建）
   const configuredTextsRef = useRef<string[]>([]);
@@ -558,6 +560,11 @@ export default function SharePage({ shareId }: SharePageProps) {
 
   // 处理捏合选择照片
   const handlePinch = useCallback((pos: { x: number; y: number }) => {
+    // 锁定期间忽略捏合操作
+    if (photoLocked) {
+      return;
+    }
+    
     if (selectedPhotoIndex !== null) {
       setSelectedPhotoIndex(null);
     } else {
@@ -578,15 +585,25 @@ export default function SharePage({ shareId }: SharePageProps) {
 
       if (closestDist < 0.15) {
         setSelectedPhotoIndex(closestIndex);
+        // 启动锁定，锁定1秒
+        setPhotoLocked(true);
+        if (photoLockTimerRef.current) {
+          clearTimeout(photoLockTimerRef.current);
+        }
+        photoLockTimerRef.current = setTimeout(() => {
+          setPhotoLocked(false);
+        }, 1000); // 锁定1秒
       }
     }
-  }, [selectedPhotoIndex]);
+  }, [selectedPhotoIndex, photoLocked]);
 
   // 处理手掌滑动控制视角
   const handlePalmMove = useCallback((deltaX: number, deltaY: number) => {
+    // 照片锁定期间禁止相机移动
+    if (photoLocked) return;
     // 直接更新 ref，避免触发 React 重新渲染
     palmMoveRef.current = { x: deltaX, y: deltaY };
-  }, []);
+  }, [photoLocked]);
 
   // 处理手势旋转速度控制 - 直接更新 Ref
   const handleRotationSpeedChange = useCallback((speed: number) => {
@@ -928,8 +945,11 @@ export default function SharePage({ shareId }: SharePageProps) {
         debugMode={false}
         enabled={!showTutorial}
         isPhotoSelected={selectedPhotoIndex !== null}
+        photoLocked={photoLocked}
         onPinch={handlePinch}
         onPalmMove={handlePalmMove}
+        palmSpeed={sceneConfig.cameraSensitivity || 25}
+        zoomSpeed={sceneConfig.zoomSpeed || 100}
       />
 
       {/* 底部按钮 - 分享模式只显示音乐、帮助和聚合/散开 */}

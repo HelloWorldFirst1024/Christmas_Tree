@@ -1,3 +1,4 @@
+
 import { CONFIG } from '../config';
 import type { 
   BellConfig, 
@@ -52,7 +53,7 @@ export const getMobileAdaptedConfig = (): MobileAdaptedConfig => {
     },
     shootingStars: {
       frequency: mobile ? [8, 15] : [5, 12],  // 降低出现频率
-      trailLength: mobile ? 0.5 : 0.8,        // 缩短拖尾
+      trailLength: mobile ? 0.5 : 0.8,        // 顺短拖尾
       glowIntensity: mobile ? 0.5 : 0.8       // 降低发光强度
     },
     aurora: {
@@ -510,6 +511,8 @@ export const getDefaultSceneConfig = (forceMinimal = false): Record<string, unkn
       hideTree: true,
       textCount: useMinimal ? 500 : 1000,
       heartCount: useMinimal ? 800 : 1500
-    }
+    },
+    cameraSensitivity: 25, // 默认灵敏度
+    zoomSpeed: 100 // 默认放大缩小速度
   };
 };
