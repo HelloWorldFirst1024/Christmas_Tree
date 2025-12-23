@@ -62,6 +62,7 @@ export default function GrandTreeApp() {
   const [musicPlaying, setMusicPlaying] = useState(true);
   const [aiEnabled, setAiEnabled] = useState(true);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
+  const [hoveredPhotoIndex, setHoveredPhotoIndex] = useState<number | null>(null); // 手势高亮的照片索引
   const [photoLocked, setPhotoLocked] = useState(false); // 照片选中后的锁定期
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -623,6 +624,7 @@ export default function GrandTreeApp() {
     if (selectedPhotoIndex !== null) {
       // 已选中照片时，捏合取消选择
       setSelectedPhotoIndex(null);
+      setHoveredPhotoIndex(null);
     } else {
       // 未选中时，选择最近的照片，并设置距离阈值避免误选
       let closestIndex = -1;
@@ -642,7 +644,14 @@ export default function GrandTreeApp() {
 
       // 仅在距离足够近时选中，避免远距离抖动误触
       if (closestIndex >= 0 && closestDist < 0.18) {
-        setSelectedPhotoIndex(closestIndex);
+        // 第一次捏合：先高亮（1.5x）但不完全放大；第二次捏合才真正选中
+        if (hoveredPhotoIndex === closestIndex) {
+          setSelectedPhotoIndex(closestIndex);
+          setHoveredPhotoIndex(null);
+        } else {
+          setHoveredPhotoIndex(closestIndex);
+          return;
+        }
         // 启动短锁定期，减少重复触发但保持流畅
         setPhotoLocked(true);
         if (photoLockTimerRef.current) {
@@ -653,7 +662,7 @@ export default function GrandTreeApp() {
         }, 1000); // 锁定1秒
       }
     }
-  }, [selectedPhotoIndex, showHeart, photoLocked]);
+  }, [selectedPhotoIndex, showHeart, photoLocked, hoveredPhotoIndex]);
 
   // 处理手掌滑动控制视角
   const handlePalmMove = useCallback((deltaX: number, deltaY: number) => {
@@ -1181,6 +1190,7 @@ export default function GrandTreeApp() {
             zoomRef={zoomRef}
             config={sceneConfig}
             selectedPhotoIndex={selectedPhotoIndex}
+            hoveredPhotoIndex={hoveredPhotoIndex}
             onPhotoSelect={setSelectedPhotoIndex}
             photoPaths={uploadedPhotos}
             showHeart={showHeart}

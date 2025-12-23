@@ -154,6 +154,7 @@ const calculateGatherDelay = (targetPos: THREE.Vector3, shape: GatherShape, h: n
 interface PhotoOrnamentsProps {
   state: SceneState;
   selectedIndex: number | null;
+  hoveredIndex?: number | null; // 手势高亮的照片索引（1.5x 放大提示）
   onPhotoClick?: (index: number | null) => void;
   photoPaths: string[];
   easing?: AnimationEasing;
@@ -168,7 +169,8 @@ interface PhotoOrnamentsProps {
 
 export const PhotoOrnaments = ({ 
   state, 
-  selectedIndex, 
+  selectedIndex,
+  hoveredIndex,
   onPhotoClick, 
   photoPaths,
   easing = 'easeInOut',
@@ -343,6 +345,7 @@ export const PhotoOrnaments = ({
       if (!objData) return;
       
       const isSelected = selectedIndex === i;
+      const isHovered = hoveredIndex === i;
       
       // 计算当前的 chaos 位置
       const currentChaos = currentChaosRef.current[i];
@@ -380,7 +383,8 @@ export const PhotoOrnaments = ({
           const adjustedT = Math.max(0, Math.min(1, (rawT - delay) / (1 - delay)));
           elementT = easeFn(adjustedT);
         }
-        targetScale = objData.scale;
+        // 未选中时，如果是当前手势高亮的照片，放大 1.5 倍作为提示
+        targetScale = isHovered ? objData.scale * 1.5 : objData.scale;
         group.position.lerpVectors(animatedChaosPos, objData.targetPos, elementT);
         objData.currentPos.copy(group.position);
       }

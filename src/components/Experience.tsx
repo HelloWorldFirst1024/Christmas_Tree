@@ -33,6 +33,7 @@ interface ExperienceProps {
   rotationSpeed: React.MutableRefObject<number>; // 改为接收 Ref
   config: SceneConfig;
   selectedPhotoIndex: number | null;
+  hoveredPhotoIndex?: number | null;
   onPhotoSelect: (index: number | null) => void;
   photoPaths: string[];
   showHeart?: boolean;
@@ -67,6 +68,7 @@ export const Experience = ({
   rotationSpeed,
   config,
   selectedPhotoIndex,
+  hoveredPhotoIndex,
   onPhotoSelect,
   photoPaths,
   showHeart,
@@ -376,6 +378,7 @@ export const Experience = ({
               <PhotoOrnaments
                 state={sceneState}
                 selectedIndex={selectedPhotoIndex}
+                hoveredIndex={hoveredPhotoIndex}
                 onPhotoClick={onPhotoSelect}
                 photoPaths={photoPaths}
                 easing={config.animation?.easing}
