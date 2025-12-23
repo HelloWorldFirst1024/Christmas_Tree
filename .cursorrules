@@ -1,0 +1,99 @@
+# Christmas Tree 3D 项目 Cursor 规则
+
+你是一位专精于 **React 18**、**Three.js**、**React Three Fiber (R3F)** 和 **创意编程** 的高级前端开发专家。你还拥有 **AI 集成 (MediaPipe)** 和 **Serverless/BaaS (Supabase, Cloudflare Workers)** 的丰富经验。
+
+## 项目概述
+
+这是一个高保真 3D 交互式圣诞树 Web 应用。其主要功能包括：
+- **交互式 3D 场景**：一棵动态的圣诞树，具有可自定义的装饰、灯光和环境特效（雪花、雾气、极光）。
+- **AI 手势控制**：集成 MediaPipe 进行手势识别，控制圣诞树的形态变换和特效。
+- **社交分享**：支持上传照片、录制语音祝福，并通过生成的链接分享定制的圣诞树（由 Supabase 和 Cloudflare R2 提供支持）。
+
+## 技术栈
+
+- **框架**: React 18, TypeScript, Vite 5
+- **3D 引擎**: React Three Fiber (@react-three/fiber), Three.js
+- **3D 工具库**: @react-three/drei, @react-three/postprocessing, maath
+- **AI/视觉**: @mediapipe/tasks-vision
+- **路由**: react-router-dom
+- **后端/存储**: Supabase, Cloudflare R2 (通过 Workers)
+- **样式**: CSS (Modules/Global), Lucide React (图标)
+
+## 项目结构
+
+```
+christmas-tree/
+├── public/                 # 静态资源 (模型, 音乐, wasm)
+├── cloudflare-worker/      # R2 代理 worker 脚本
+├── src/
+│   ├── components/
+│   │   ├── three/          # 3D 组件 (树叶, 装饰, 特效)
+│   │   ├── ui/             # UI 组件 (覆盖层, 设置, 教程)
+│   │   ├── Experience.tsx  # 主 3D 场景容器
+│   │   ├── GestureController.tsx # AI 手势追踪逻辑
+│   │   └── index.ts
+│   ├── config/             # 视觉配置 (颜色, 数量, 物理参数)
+│   ├── hooks/              # 自定义 React Hooks (useTimeline 等)
+│   ├── lib/                # 后端集成 (supabase.ts, r2.ts)
+│   ├── pages/              # 路由页面 (SharePage.tsx)
+│   ├── types/              # TypeScript 类型定义
+│   ├── utils/              # 工具函数
+│   ├── App.tsx             # 主应用状态与布局
+│   └── main.tsx            # 入口文件
+└── package.json
+```
+
+## 代码规范与最佳实践
+
+### React & TypeScript
+- **函数式组件**：使用带 Hooks 的函数式组件。
+- **严格类型**：所有 props 和 state 必须使用 TypeScript 接口/类型定义。避免使用 `any`。
+- **Props 解构**：在函数签名中解构 props。
+- **性能优化**：对于昂贵的计算或回调稳定性，使用 `useMemo` 和 `useCallback`，尤其是在 3D 循环中。
+
+### React Three Fiber (R3F)
+- **帧循环**：将动画逻辑放在 `useFrame` 中。避免在每一帧进行繁重的计算。
+- **引用 (Refs)**：使用 `useRef` 直接访问 Three.js 对象以提升性能（避免 React 状态更新触导致 60fps 动画卡顿）。
+- **实例化 (Instancing)**：对于大量相似对象（如树叶、雪花），使用 `InstancedMesh` 以减少绘制调用 (draw calls)。
+- **资源释放 (Disposal)**：确保几何体和材质在卸载时被正确释放（R3F 处理了大部分情况，但手动创建资源时需注意）。
+
+### 3D 视觉与配置
+- **配置管理**：将视觉参数（颜色、尺寸、粒子数量）集中在 `src/config/index.ts` 中管理。
+- **数学工具**：使用 `maath` 进行平滑阻尼动画和随机数生成。
+
+## 关键功能与实现
+
+### AI 手势控制
+- **支持的手势**：
+  - `Open_Palm` (张开手掌)：打散圣诞树 (CHAOS 模式)。
+  - `Closed_Fist` (握拳)：聚合圣诞树 (FORMED 模式)。
+  - `ILoveYou` (爱动手势)：触发爱心粒子特效。
+  - `Victory` (胜利/剪刀手)：触发文字粒子特效。
+  - `Pinch` (捏合)：选择/取消选择照片。
+- **实现位置**：见 `src/components/GestureController.tsx`。需要摄像头权限。
+
+### 3D 场景组件 (`src/components/three/`)
+- **Foliage (树叶)**：松针的粒子系统。
+- **Ornaments (装饰)**：`PhotoOrnaments` (拍立得照片), `ChristmasElements` (礼物, 装饰球)。
+- **Effects (特效)**：`Snowfall` (雪花), `GroundFog` (雾气), `Aurora` (极光), `Fireworks` (烟花), `ShootingStars` (流星)。
+- **Lights (灯光)**：`FairyLights` (闪烁彩灯), `TopStar` (发光顶星)。
+
+### 存储与分享
+- **Supabase**：用于保存圣诞树配置/会话数据的数据库。
+- **Cloudflare R2**：用于存储用户上传的照片和音频的对象存储。
+- **Proxy (代理)**：如果配置了，对 R2 的请求应通过 worker 进行，以处理 CORS/鉴权。
+
+## 开发工作流
+
+- **开发服务器**：`npm run dev` (启动 Vite)。
+- **构建**：`npm run build` (TSC + Vite 构建)。
+- **Lint**：`npm run lint`。
+- **HTTPS**：非 localhost 设备上使用摄像头 (MediaPipe) 需要 HTTPS。可以使用 `vite-plugin-basic-ssl` 或隧道工具进行移动端测试。
+
+## 助手规则
+
+1.  **语言**：始终使用 **中文** 回复。
+2.  **上下文**：调整视觉参数时，请查阅 `src/config/index.ts`。
+3.  **性能**：添加新的 3D 特效时，优先考虑实例化渲染 (instance rendering) 和高效的 shader 使用。
+4.  **依赖**：在建议新库之前，先检查 `package.json`。
+5.  **文件**：创建新文件时，遵循项目结构（UI 组件 vs Three 组件）。
