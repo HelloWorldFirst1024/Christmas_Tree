@@ -451,7 +451,7 @@ export const getDefaultSceneConfig = (forceMinimal = false): Record<string, unkn
   return {
     foliage: { 
       enabled: true, 
-      count: useMinimal ? 3000 : 15000, 
+      count: useMinimal ? 1000 : 15000, 
       color: '#00FF88', 
       size: 1, 
       glow: 1 
@@ -466,7 +466,7 @@ export const getDefaultSceneConfig = (forceMinimal = false): Record<string, unkn
     },
     snow: { 
       enabled: true, 
-      count: useMinimal ? 300 : 2000, 
+      count: useMinimal ? 100 : 2000, 
       speed: 2, 
       size: 0.5, 
       opacity: 0.8 
