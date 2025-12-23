@@ -251,7 +251,7 @@ export const validateImageFile = (file: File): Promise<{ valid: boolean; error?:
       return;
     }
 
-    // 2. 读取文件头进行二进制校验
+    // 2. 读取文件头进行二进制校验（只需前 16 字节）
     const reader = new FileReader();
     reader.onload = () => {
       const arr = new Uint8Array(reader.result as ArrayBuffer);
@@ -267,9 +267,8 @@ export const validateImageFile = (file: File): Promise<{ valid: boolean; error?:
         return;
       }
 
-      // 3. 尝试加载为 Image 验证可渲染性
-      const blob = new Blob([arr], { type: file.type });
-      const url = URL.createObjectURL(blob);
+      // 3. 尝试加载为 Image 验证可渲染性（使用原始文件，而不是截断数据）
+      const url = URL.createObjectURL(file);
       const img = new Image();
       
       img.onload = () => {

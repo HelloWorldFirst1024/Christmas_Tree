@@ -63,6 +63,7 @@ export default function SharePage({ shareId }: SharePageProps) {
   const [musicPlaying, setMusicPlaying] = useState(true);
   const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | null>(null);
   const [photoLocked, setPhotoLocked] = useState(false); // 照片选中后的锁定期
+  const [glResetKey, setGlResetKey] = useState(0);
 
   // 手势效果状态
   const [showHeart, setShowHeart] = useState(false);
@@ -79,6 +80,16 @@ export default function SharePage({ shareId }: SharePageProps) {
   });
   const [hideTree, setHideTree] = useState(false);
   const [preloadTextPlayed, setPreloadTextPlayed] = useState(false);
+  // WebGL 上下文丢失时重建 Canvas（移动端/低端设备可能出现）
+  const handleWebglContextLost = useCallback((e?: Event) => {
+    try {
+      e?.preventDefault?.();
+    } catch {
+      // ignore
+    }
+    console.warn('WebGL context lost on share page, restarting renderer...');
+    setGlResetKey((k) => k + 1);
+  }, []);
   
   // 开场文案状态
   const [introShown, setIntroShown] = useState(false);
@@ -895,6 +906,7 @@ export default function SharePage({ shareId }: SharePageProps) {
       {/* 3D Canvas - 教程显示时暂停渲染 */}
       <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
         <Canvas
+          key={glResetKey}
           dpr={mobile ? 1 : isTablet() ? 1.5 : [1, 2]}
           gl={{
             toneMapping: THREE.ReinhardToneMapping,
@@ -905,6 +917,11 @@ export default function SharePage({ shareId }: SharePageProps) {
           }}
           shadows={false}
           frameloop={showTutorial ? 'never' : 'always'}
+          onCreated={(state) => {
+            const canvas = state.gl.domElement;
+            const handleLost = (event: Event) => handleWebglContextLost(event);
+            canvas.addEventListener('webglcontextlost', handleLost, { passive: false });
+          }}
         >
           <Experience
             sceneState={timeline.showTree ? 'FORMED' : sceneState}

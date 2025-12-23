@@ -65,6 +65,16 @@ export default function GrandTreeApp() {
   const [photoLocked, setPhotoLocked] = useState(false); // 照片选中后的锁定期
   const [uploadedPhotos, setUploadedPhotos] = useState<string[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
+  // WebGL 上下文丢失时重建 Canvas
+  const handleWebglContextLost = useCallback((e?: Event) => {
+    try {
+      e?.preventDefault?.();
+    } catch {
+      // ignore
+    }
+    console.warn('WebGL context lost, restarting renderer...');
+    setRefreshKey((k) => k + 1);
+  }, []);
 
   // 手势效果状态
   const [showHeart, setShowHeart] = useState(false);
@@ -1176,6 +1186,12 @@ export default function GrandTreeApp() {
           }}
           shadows={false}
           frameloop="always"
+          // GPU / 浏览器显存不足时，防止默认处理导致 React DOM 异常，手动重建 Canvas
+          onCreated={(state) => {
+            const canvas = state.gl.domElement;
+            const handleLost = (event: Event) => handleWebglContextLost(event);
+            canvas.addEventListener('webglcontextlost', handleLost, { passive: false });
+          }}
         >
           <Experience
             sceneState={timeline.showTree ? 'FORMED' : sceneState}
