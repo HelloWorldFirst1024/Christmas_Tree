@@ -45,7 +45,7 @@ const generateScatterPosition = (shape: ScatterShape, index: number): THREE.Vect
     case 'explosion': {
       const theta = r1 * Math.PI * 2;
       const phi = Math.acos(2 * r2 - 1);
-      const r = 25 + r3 * 30;
+      const r = 12 + r3 * 18; // 从 25-55 减少到 12-30
       return new THREE.Vector3(
         r * Math.sin(phi) * Math.cos(theta),
         r * Math.sin(phi) * Math.sin(theta),
@@ -55,20 +55,20 @@ const generateScatterPosition = (shape: ScatterShape, index: number): THREE.Vect
     case 'spiral': {
       const t = r1;
       const angle = t * Math.PI * 10;
-      const radius = 10 + t * 30 + r2 * 6;
+      const radius = 6 + t * 18 + r2 * 4; // 从 10-46 减少到 6-28
       const y = -25 + t * 60 + (r3 - 0.5) * 10;
       return new THREE.Vector3(radius * Math.cos(angle), y, radius * Math.sin(angle));
     }
     case 'rain': {
       return new THREE.Vector3(
-        (r1 - 0.5) * 70,
+        (r1 - 0.5) * 40, // 从 ±35 减少到 ±20
         30 + r2 * 40,
-        (r3 - 0.5) * 70
+        (r3 - 0.5) * 40 // 从 ±35 减少到 ±20
       );
     }
     case 'ring': {
       const angle = r1 * Math.PI * 2;
-      const radius = 25 + r2 * 12;
+      const radius = 15 + r2 * 8; // 从 25-37 减少到 15-23
       const y = (r3 - 0.5) * 18;
       return new THREE.Vector3(radius * Math.cos(angle), y, radius * Math.sin(angle));
     }
@@ -77,7 +77,7 @@ const generateScatterPosition = (shape: ScatterShape, index: number): THREE.Vect
       // 均匀球形分布
       const theta = r1 * Math.PI * 2;
       const phi = Math.acos(2 * r2 - 1);
-      const r = Math.cbrt(r3) * 35;
+      const r = Math.cbrt(r3) * 20; // 从 35 减少到 20
       return new THREE.Vector3(
         r * Math.sin(phi) * Math.cos(theta),
         r * Math.cos(phi),

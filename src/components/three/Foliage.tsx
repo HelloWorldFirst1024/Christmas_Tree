@@ -148,7 +148,7 @@ const generateScatterPositions = (count: number, shape: ScatterShape, scaleMulti
         const r3 = seededRandom(i * 3 + 3);
         const theta = r1 * Math.PI * 2;
         const phi = Math.acos(2 * r2 - 1);
-        const r = (8 + r3 * 12) * scaleMultiplier; // 从 15-35 减少到 8-20
+        const r = (15 + r3 * 20) * scaleMultiplier;
         positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
         positions[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
         positions[i * 3 + 2] = r * Math.cos(phi);
@@ -161,7 +161,7 @@ const generateScatterPositions = (count: number, shape: ScatterShape, scaleMulti
         const r2 = seededRandom(i * 3 + 2);
         const t = i / count;
         const angle = t * Math.PI * 12;
-        const r = (3 + t * 12 + r1 * 2) * scaleMultiplier; // 从 5-28 减少到 3-17
+        const r = (5 + t * 20 + r1 * 3) * scaleMultiplier;
         const y = (-15 + t * 40 + (r2 - 0.5) * 5) * scaleMultiplier;
         positions[i * 3] = r * Math.cos(angle);
         positions[i * 3 + 1] = y;
@@ -174,9 +174,9 @@ const generateScatterPositions = (count: number, shape: ScatterShape, scaleMulti
         const r1 = seededRandom(i * 3 + 1);
         const r2 = seededRandom(i * 3 + 2);
         const r3 = seededRandom(i * 3 + 3);
-        positions[i * 3] = (r1 - 0.5) * 30 * scaleMultiplier; // 从 ±25 减少到 ±15
+        positions[i * 3] = (r1 - 0.5) * 50 * scaleMultiplier;
         positions[i * 3 + 1] = (20 + r2 * 30) * scaleMultiplier;
-        positions[i * 3 + 2] = (r3 - 0.5) * 30 * scaleMultiplier; // 从 ±25 减少到 ±15
+        positions[i * 3 + 2] = (r3 - 0.5) * 50 * scaleMultiplier;
       }
       break;
     }
@@ -186,7 +186,7 @@ const generateScatterPositions = (count: number, shape: ScatterShape, scaleMulti
         const r2 = seededRandom(i * 3 + 2);
         const r3 = seededRandom(i * 3 + 3);
         const angle = r1 * Math.PI * 2;
-        const r = (12 + r2 * 6) * scaleMultiplier; // 从 18-26 减少到 12-18
+        const r = (18 + r2 * 8) * scaleMultiplier;
         const y = (r3 - 0.5) * 10 * scaleMultiplier;
         const thickness = (r2 - 0.5) * 4 * scaleMultiplier;
         positions[i * 3] = (r + thickness) * Math.cos(angle);
@@ -206,7 +206,7 @@ const generateScatterPositions = (count: number, shape: ScatterShape, scaleMulti
         const theta = r1 * Math.PI * 2;
         const phi = Math.acos(2 * r2 - 1); // 均匀分布在球面上
         // 使用立方根使粒子在球体内部均匀分布，半径随树形尺寸缩放
-        const r = Math.cbrt(r3) * 15 * scaleMultiplier; // 从 25 减少到 15
+        const r = Math.cbrt(r3) * 25 * scaleMultiplier;
         // 标准球面坐标转换
         positions[i * 3] = r * Math.sin(phi) * Math.cos(theta);     // X
         positions[i * 3 + 1] = r * Math.cos(phi);                    // Y (上下)
