@@ -389,6 +389,30 @@ export const restoreVoiceDataToConfig = (config: Record<string, unknown>, voiceU
     return restored;
 };
 
-// 为了兼容旧代码的占位函数
-export const refreshShareExpiry = async () => ({ success: true });
-export const deleteShare = async () => ({ success: true });
+// 为了兼容旧代码的分享记录操作函数签名（App.tsx 仍然传入 shareId / editToken 并读取 error 字段）
+export const refreshShareExpiry = async (
+  _shareId: string,
+  _editToken: string
+): Promise<{ success: boolean; newExpiresAt?: number; error?: string }> => {
+  // Supabase 版本暂不实现真正的续期逻辑，直接返回成功结果，避免打断前端流程
+  return { success: true, newExpiresAt: Date.now() + 7 * 24 * 60 * 60 * 1000 };
+};
+
+export const deleteShare = async (
+  _shareId: string,
+  _editToken: string
+): Promise<{ success: boolean; error?: string }> => {
+  // Supabase 版本暂不实现真正的删除远端记录，只清理前端本地状态
+  clearLocalShare();
+  return { success: true };
+};
+
+// 提供给 TimelineEditor / VoiceRecorder 使用的音频转 base64 工具
+export const audioToBase64 = (blob: Blob): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+};
