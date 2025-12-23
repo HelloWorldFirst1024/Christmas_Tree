@@ -10,7 +10,7 @@ import { useTimeline } from './hooks/useTimeline';
 import { 
   uploadShare, getLocalShare, getShareUrl, updateShare, getShare,
   saveLocalConfig, getLocalConfig, saveLocalPhotos, getLocalPhotos,
-  refreshShareExpiry, deleteShare, clearLocalShare
+  clearLocalShare
 } from './lib/r2';
 import type { SceneState, SceneConfig, GestureConfig, GestureAction, MusicConfig } from './types';
 import { PRESET_MUSIC } from './types';
@@ -1003,21 +1003,14 @@ export default function GrandTreeApp() {
               }
             },
             onRefresh: async () => {
-              const result = await refreshShareExpiry(localShare.shareId, localShare.editToken);
-              if (result.success) {
-                showModal('alert', '续期成功', '分享有效期已延长 7 天');
-              } else {
-                showModal('error', '续期失败', result.error);
-              }
+              // Supabase 简化版本：暂不支持真正续期，只给出提示
+              showModal('alert', '提示', '当前部署暂不支持续期功能，如需延长有效期，请重新创建分享链接。');
             },
             onDelete: async () => {
-              const result = await deleteShare(localShare.shareId, localShare.editToken);
-              if (result.success) {
-                setModalVisible(false);
-                showModal('alert', '已删除', '分享已删除，您可以创建新的分享');
-              } else {
-                showModal('error', '删除失败', result.error);
-              }
+              // 仅清除本地记录，避免类型问题和后端复杂度
+              clearLocalShare();
+              setModalVisible(false);
+              showModal('alert', '已删除', '本地分享记录已删除，您可以重新创建新的分享。');
             }
           });
           showModal('share', '分享管理', '您已创建过分享，可以更新或管理');
@@ -1061,27 +1054,14 @@ export default function GrandTreeApp() {
               }
             },
             onRefresh: async () => {
-              const localShareNow = getLocalShare();
-              if (localShareNow) {
-                const refreshResult = await refreshShareExpiry(localShareNow.shareId, localShareNow.editToken);
-                if (refreshResult.success) {
-                  showModal('alert', '续期成功', '分享有效期已延长 7 天');
-                } else {
-                  showModal('error', '续期失败', refreshResult.error);
-                }
-              }
+              // Supabase 简化版本：暂不支持真正续期，只给出提示
+              showModal('alert', '提示', '当前部署暂不支持续期功能，如需延长有效期，请重新创建分享链接。');
             },
             onDelete: async () => {
-              const localShareNow = getLocalShare();
-              if (localShareNow) {
-                const deleteResult = await deleteShare(localShareNow.shareId, localShareNow.editToken);
-                if (deleteResult.success) {
-                  setModalVisible(false);
-                  showModal('alert', '已删除', '分享已删除');
-                } else {
-                  showModal('error', '删除失败', deleteResult.error);
-                }
-              }
+              // 仅清除本地记录
+              clearLocalShare();
+              setModalVisible(false);
+              showModal('alert', '已删除', '本地分享记录已删除，您可以重新创建新的分享。');
             }
           });
           showModal('share', '分享成功', '您的圣诞树已分享！');
